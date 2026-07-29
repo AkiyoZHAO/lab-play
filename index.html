@@ -144,10 +144,7 @@ const SUPABASE_URL = 'https://biiarbusbmdnqyjfnhax.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_gKU7fggwQQX73nVZnApvxg_QdeH438A';
 // ==========================================================
 
-let db = null;
-if (SUPABASE_URL !== 'https://biiarbusbmdnqyjfnhax.supabase.co') {
-  db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const pool = document.getElementById('pool');
 const box = document.getElementById('box');
