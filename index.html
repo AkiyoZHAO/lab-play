@@ -158,17 +158,37 @@ const statsEl = document.getElementById('stats');
 
 let countdownId = null;
 let currentPick = null;
+let currentLogId = null; // 当前这一轮抽签在数据库里对应的记录 id（pending状态）
 
 function getItems() {
   return pool.value.split('\n').map(s => s.trim()).filter(Boolean);
 }
 
-async function logResult(activity, status) {
-  if (!db) return;
+// 抽签的瞬间调用：立刻插入一条 pending 记录，返回这条记录的 id。
+// 这样即使用户中途关掉网页、换设备，数据库里也已经留下了“抽过这一签”的痕迹，
+// 不会因为没等到“完成/没做”的反馈就彻底丢失这次抽签的历史。
+async function createPendingLog(activity) {
+  if (!db) return null;
   try {
-    await db.from('lottery_log').insert({ activity: activity, status: status });
+    const { data, error } = await db.from('lottery_log')
+      .insert({ activity: activity, status: 'pending' })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data.id;
   } catch (e) {
-    console.error('写入数据库失败', e);
+    console.error('创建抽签记录失败', e);
+    return null;
+  }
+}
+
+// 反馈阶段调用：把之前插入的 pending 记录更新成 done/skip，而不是新插入一条。
+async function updateLogStatus(logId, status) {
+  if (!db || !logId) return;
+  try {
+    await db.from('lottery_log').update({ status: status }).eq('id', logId);
+  } catch (e) {
+    console.error('更新抽签记录失败', e);
   }
 }
 
@@ -182,45 +202,106 @@ async function renderStats() {
     if (error) throw error;
     const done = data.filter(r => r.status === 'done').length;
     const skipped = data.filter(r => r.status === 'skip').length;
-    statsEl.textContent = (done + skipped) > 0
-      ? '累计完成 ' + done + ' 次，跳过 ' + skipped + ' 次'
-      : '';
+    const pending = data.filter(r => r.status === 'pending').length;
+    const parts = [];
+    if (done > 0) parts.push('完成 ' + done + ' 次');
+    if (skipped > 0) parts.push('跳过 ' + skipped + ' 次');
+    if (pending > 0) parts.push('待反馈 ' + pending + ' 次');
+    statsEl.textContent = parts.join('，');
   } catch (e) {
     statsEl.textContent = '统计加载失败';
   }
 }
 
+const DEADLINE_KEY = 'lottery_deadline';
+const PICK_KEY = 'lottery_pick';
+const LOGID_KEY = 'lottery_log_id';
+
 function stopTimer() {
   if (countdownId) { clearInterval(countdownId); countdownId = null; }
+  localStorage.removeItem(DEADLINE_KEY);
+}
+
+// “完成/没做”两个按钮点完之后调用：把界面彻底恢复到初始状态，
+// 同时清掉本地存储里残留的 pick 记录，这样重新抽签、或者中途刷新页面，
+// 都不会把已经处理完的这一轮误当成还没处理的“待反馈”状态。
+function resetToIdle() {
+  stopTimer();
+  localStorage.removeItem(PICK_KEY);
+  localStorage.removeItem(LOGID_KEY);
+  currentPick = null;
+  currentLogId = null;
+  timerEl.style.display = 'none';
+  feedback.style.display = 'none';
+  drawBtn.style.display = 'inline-block';
+}
+
+function onTimerFinished() {
+  stopTimer();
+  timerEl.textContent = '时间到';
+  feedback.style.display = 'flex';
+  drawBtn.style.display = 'none';
+}
+
+// 核心：不再靠“每秒减1”累计计数，而是记录一个绝对的“结束时间点”，
+// 每次渲染都用“当前真实时间”去减这个结束时间点。
+// 这样即使手机锁屏/切后台导致 setInterval 被系统暂停几分钟，
+// 只要页面重新活跃，一算真实时间差就能立刻得到正确的剩余秒数，不会累积误差。
+function tick() {
+  const deadline = Number(localStorage.getItem(DEADLINE_KEY));
+  if (!deadline) return;
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) {
+    onTimerFinished();
+    return;
+  }
+  const remaining = Math.ceil(remainingMs / 1000);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  timerEl.textContent = m + ':' + String(s).padStart(2, '0');
 }
 
 function startTimer(minutes) {
   stopTimer();
-  let remaining = minutes * 60;
+  const deadline = Date.now() + minutes * 60 * 1000;
+  localStorage.setItem(DEADLINE_KEY, String(deadline));
   timerEl.style.display = 'block';
-  function render() {
-    const m = Math.floor(remaining / 60);
-    const s = remaining % 60;
-    timerEl.textContent = m + ':' + String(s).padStart(2, '0');
-  }
-  render();
-  countdownId = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      stopTimer();
-      timerEl.textContent = '时间到';
-      feedback.style.display = 'flex';
-      drawBtn.style.display = 'none';
-      return;
-    }
-    render();
-  }, 1000);
+  tick();
+  countdownId = setInterval(tick, 1000);
 }
+
+// 页面从后台切回前台时（比如解锁手机、切回这个标签页），
+// 立刻强制刷新一次倒计时，不用等 setInterval 慢慢恢复。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    tick();
+  }
+});
+
+// 页面刚打开时，如果发现之前有未结束的倒计时（比如网页被杀后重新打开），
+// 自动恢复倒计时显示状态和当时抽到的项目，而不是让它们凭空消失。
+(function restoreTimerOnLoad() {
+  const deadline = Number(localStorage.getItem(DEADLINE_KEY));
+  const savedPick = localStorage.getItem(PICK_KEY);
+  const savedLogId = localStorage.getItem(LOGID_KEY);
+  if (!deadline) return;
+  currentPick = savedPick || null;
+  currentLogId = savedLogId || null;
+  result.textContent = currentPick || '';
+  if (deadline <= Date.now()) {
+    onTimerFinished();
+  } else {
+    timerEl.style.display = 'block';
+    tick();
+    countdownId = setInterval(tick, 1000);
+  }
+})();
 
 drawBtn.addEventListener('click', () => {
   const items = getItems();
   if (items.length === 0) return;
   stopTimer();
+  currentLogId = null;
   timerEl.style.display = 'none';
   feedback.style.display = 'none';
   drawBtn.style.display = 'inline-block';
@@ -239,23 +320,33 @@ drawBtn.addEventListener('click', () => {
       clearInterval(spinId);
       box.style.transform = 'scale(1.2) rotate(0deg)';
       setTimeout(() => { box.style.transform = 'scale(1) rotate(0deg)'; }, 150);
+      localStorage.setItem(PICK_KEY, currentPick);
       startTimer(30);
+      // 抽签结果一确定，立刻插入 pending 记录（不等倒计时/反馈），
+      // 保证这次抽签本身一定会被数据库记住。
+      createPendingLog(currentPick).then(id => {
+        currentLogId = id;
+        if (id) localStorage.setItem(LOGID_KEY, id);
+        renderStats();
+      });
     }
   }, 75);
 });
 
 doneBtn.addEventListener('click', async () => {
-  await logResult(currentPick, 'done');
+  const finishedPick = currentPick;
+  await updateLogStatus(currentLogId, 'done');
   await renderStats();
-  feedback.style.display = 'none';
-  result.textContent = '完成：' + currentPick;
+  resetToIdle();
+  result.textContent = '完成：' + finishedPick;
 });
 
 skipDoneBtn.addEventListener('click', async () => {
-  await logResult(currentPick, 'skip');
+  const finishedPick = currentPick;
+  await updateLogStatus(currentLogId, 'skip');
   await renderStats();
-  feedback.style.display = 'none';
-  result.textContent = '没做：' + currentPick;
+  resetToIdle();
+  result.textContent = '没做：' + finishedPick;
 });
 
 renderStats();
