@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>统计 · bless</title>
+<link rel="apple-touch-icon" href="icon.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #14100d;
+    color: #f5f0e8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 20px 16px 40px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .topbar h1 {
+    font-size: 20px;
+    margin: 0;
+    font-weight: 600;
+  }
+  .back-link {
+    color: #b8a892;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #3a2f25;
+  }
+  .back-link:active { background: #2a2119; }
+
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    background: #2a2119;
+    border: 1px solid #3a2f25;
+    color: #d8cdbe;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .pill.active {
+    background: #D85A30;
+    border-color: #D85A30;
+    color: #fff;
+    font-weight: 600;
+  }
+  .custom-range {
+    display: none;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .custom-range.show { display: flex; }
+  .custom-range input[type="date"] {
+    background: #2a2119;
+    border: 1px solid #3a2f25;
+    color: #f5f0e8;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .custom-range span { color: #b8a892; font-size: 13px; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: linear-gradient(160deg, #211a14, #1a140f);
+    border: 1px solid #33281f;
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .kpi-label {
+    font-size: 12px;
+    color: #b8a892;
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .kpi-value .unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: #b8a892;
+    margin-left: 2px;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: #8a7a68;
+    margin-top: 4px;
+  }
+  .kpi-done .kpi-value { color: #6FCF97; }
+  .kpi-skip .kpi-value { color: #EB5757; }
+  .kpi-rate .kpi-value { color: #F2C94C; }
+
+  .card {
+    background: #1c1611;
+    border: 1px solid #2c231b;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #d8cdbe;
+    margin: 0 0 14px;
+  }
+  .chart-box { position: relative; }
+  .empty-hint {
+    text-align: center;
+    color: #6f6154;
+    font-size: 13px;
+    padding: 30px 0;
+  }
+
+  .legend-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b8a892;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #241d16;
+    font-size: 13px;
+  }
+  .rank-row:last-child { border-bottom: none; }
+  .rank-name {
+    flex: 1;
+    color: #f5f0e8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rank-bar-wrap {
+    flex: 2;
+    height: 8px;
+    background: #2a2119;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .rank-bar {
+    height: 100%;
+    border-radius: 999px;
+  }
+  .rank-pct {
+    width: 42px;
+    text-align: right;
+    color: #b8a892;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <h1>📊 抽签统计</h1>
+    <a class="back-link" href="/">← 返回抽签</a>
+  </div>
+
+  <div class="filter-row">
+    <button class="pill" data-range="7">最近7天</button>
+    <button class="pill" data-range="30">最近30天</button>
+    <button class="pill active" data-range="all">全部</button>
+    <button class="pill" data-range="custom">自定义</button>
+  </div>
+  <div class="custom-range" id="customRange">
+    <input type="date" id="startDate">
+    <span>至</span>
+    <input type="date" id="endDate">
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">总抽签次数</div>
+      <div class="kpi-value" id="kpiTotal">–</div>
+    </div>
+    <div class="kpi-card kpi-rate">
+      <div class="kpi-label">完成率</div>
+      <div class="kpi-value" id="kpiRate">–<span class="unit">%</span></div>
+      <div class="kpi-sub" id="kpiRateSub"></div>
+    </div>
+    <div class="kpi-card kpi-done">
+      <div class="kpi-label">完成</div>
+      <div class="kpi-value" id="kpiDone">–</div>
+    </div>
+    <div class="kpi-card kpi-skip">
+      <div class="kpi-label">跳过</div>
+      <div class="kpi-value" id="kpiSkip">–</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>每日趋势</h2>
+    <div class="chart-box" style="height:200px;">
+      <canvas id="trendChart"></canvas>
+    </div>
+    <div id="trendEmpty" class="empty-hint" style="display:none;">这段时间还没有记录</div>
+  </div>
+
+  <div class="card">
+    <h2>完成情况占比</h2>
+    <div class="chart-box" style="height:200px;">
+      <canvas id="donutChart"></canvas>
+    </div>
+    <div class="legend-row" id="donutLegend"></div>
+    <div id="donutEmpty" class="empty-hint" style="display:none;">这段时间还没有记录</div>
+  </div>
+
+  <div class="card">
+    <h2>活动完成率排行</h2>
+    <div id="rankList"></div>
+    <div id="rankEmpty" class="empty-hint" style="display:none;">这段时间还没有已反馈的记录</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://biiarbusbmdnqyjfnhax.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_gKU7fggwQQX73nVZnApvxg_QdeH438A';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const COLOR_DONE = '#6FCF97';
+const COLOR_SKIP = '#EB5757';
+const COLOR_PENDING = '#F2C94C';
+
+let trendChart = null;
+let donutChart = null;
+let currentRange = 'all';
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function toDateStr(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+
+function getRangeDates() {
+  const today = new Date();
+  if (currentRange === 'custom') {
+    const s = document.getElementById('startDate').value;
+    const e = document.getElementById('endDate').value;
+    return { start: s || null, end: e || null };
+  }
+  if (currentRange === 'all') {
+    return { start: null, end: null };
+  }
+  const days = Number(currentRange);
+  const start = new Date(today);
+  start.setDate(start.getDate() - (days - 1));
+  return { start: toDateStr(start), end: toDateStr(today) };
+}
+
+async function fetchRows() {
+  const { start, end } = getRangeDates();
+  let query = db.from('lottery_log').select('activity, status, created_at').order('created_at', { ascending: true });
+  if (start) query = query.gte('created_at', start + 'T00:00:00.000Z');
+  if (end) query = query.lte('created_at', end + 'T23:59:59.999Z');
+  const { data, error } = await query;
+  if (error) { console.error('读取失败', error); return []; }
+  return data || [];
+}
+
+function renderKPIs(rows) {
+  const total = rows.length;
+  const done = rows.filter(r => r.status === 'done').length;
+  const skip = rows.filter(r => r.status === 'skip').length;
+  const pending = rows.filter(r => r.status === 'pending').length;
+  const resolved = done + skip;
+  const rate = resolved > 0 ? Math.round((done / resolved) * 100) : 0;
+
+  document.getElementById('kpiTotal').textContent = total;
+  document.getElementById('kpiDone').textContent = done;
+  document.getElementById('kpiSkip').textContent = skip;
+  document.getElementById('kpiRate').innerHTML = rate + '<span class="unit">%</span>';
+  document.getElementById('kpiRateSub').textContent = pending > 0 ? ('待反馈 ' + pending + ' 次') : '';
+}
+
+function renderTrend(rows) {
+  const byDate = {};
+  rows.forEach(r => {
+    const d = r.created_at.slice(0, 10);
+    if (!byDate[d]) byDate[d] = { done: 0, skip: 0, pending: 0 };
+    byDate[d][r.status] += 1;
+  });
+  const dates = Object.keys(byDate).sort();
+  const empty = dates.length === 0;
+  document.getElementById('trendEmpty').style.display = empty ? 'block' : 'none';
+  document.getElementById('trendChart').style.display = empty ? 'none' : 'block';
+  if (empty) { if (trendChart) { trendChart.destroy(); trendChart = null; } return; }
+
+  const labels = dates.map(d => d.slice(5)); // MM-DD
+  const doneData = dates.map(d => byDate[d].done);
+  const skipData = dates.map(d => byDate[d].skip);
+  const pendingData = dates.map(d => byDate[d].pending);
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '完成', data: doneData, backgroundColor: COLOR_DONE, stack: 's' },
+        { label: '跳过', data: skipData, backgroundColor: COLOR_SKIP, stack: 's' },
+        { label: '待反馈', data: pendingData, backgroundColor: COLOR_PENDING, stack: 's' },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#b8a892' }, grid: { color: '#2a2119' } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#b8a892', precision: 0 }, grid: { color: '#2a2119' } }
+      }
+    }
+  });
+}
+
+function renderDonut(rows) {
+  const done = rows.filter(r => r.status === 'done').length;
+  const skip = rows.filter(r => r.status === 'skip').length;
+  const pending = rows.filter(r => r.status === 'pending').length;
+  const total = done + skip + pending;
+
+  const empty = total === 0;
+  document.getElementById('donutEmpty').style.display = empty ? 'block' : 'none';
+  document.getElementById('donutChart').style.display = empty ? 'none' : 'block';
+  document.getElementById('donutLegend').innerHTML = '';
+  if (empty) { if (donutChart) { donutChart.destroy(); donutChart = null; } return; }
+
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['完成', '跳过', '待反馈'],
+      datasets: [{ data: [done, skip, pending], backgroundColor: [COLOR_DONE, COLOR_SKIP, COLOR_PENDING], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      cutout: '68%'
+    }
+  });
+
+  const legendData = [
+    { label: '完成 ' + done, color: COLOR_DONE },
+    { label: '跳过 ' + skip, color: COLOR_SKIP },
+    { label: '待反馈 ' + pending, color: COLOR_PENDING },
+  ];
+  document.getElementById('donutLegend').innerHTML = legendData.map(l =>
+    '<span class="legend-item"><span class="legend-dot" style="background:' + l.color + '"></span>' + l.label + '</span>'
+  ).join('');
+}
+
+function renderRank(rows) {
+  const byActivity = {};
+  rows.forEach(r => {
+    if (r.status === 'pending') return; // 排行只看已反馈的
+    if (!byActivity[r.activity]) byActivity[r.activity] = { done: 0, skip: 0 };
+    byActivity[r.activity][r.status] += 1;
+  });
+  const list = Object.keys(byActivity).map(name => {
+    const { done, skip } = byActivity[name];
+    const total = done + skip;
+    return { name, done, skip, total, rate: total > 0 ? Math.round((done/total)*100) : 0 };
+  }).sort((a, b) => b.total - a.total || b.rate - a.rate);
+
+  const empty = list.length === 0;
+  document.getElementById('rankEmpty').style.display = empty ? 'block' : 'none';
+  const container = document.getElementById('rankList');
+  if (empty) { container.innerHTML = ''; return; }
+
+  container.innerHTML = list.map(item => {
+    const barColor = item.rate >= 70 ? COLOR_DONE : (item.rate >= 40 ? COLOR_PENDING : COLOR_SKIP);
+    return '<div class="rank-row">' +
+      '<span class="rank-name">' + item.name + '</span>' +
+      '<span class="rank-bar-wrap"><span class="rank-bar" style="width:' + item.rate + '%;background:' + barColor + '"></span></span>' +
+      '<span class="rank-pct">' + item.rate + '%</span>' +
+    '</div>';
+  }).join('');
+}
+
+async function refreshAll() {
+  const rows = await fetchRows();
+  renderKPIs(rows);
+  renderTrend(rows);
+  renderDonut(rows);
+  renderRank(rows);
+}
+
+document.querySelectorAll('.pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRange = btn.dataset.range;
+    document.getElementById('customRange').classList.toggle('show', currentRange === 'custom');
+    if (currentRange !== 'custom') refreshAll();
+  });
+});
+
+document.getElementById('startDate').addEventListener('change', () => { if (currentRange === 'custom') refreshAll(); });
+document.getElementById('endDate').addEventListener('change', () => { if (currentRange === 'custom') refreshAll(); });
+
+refreshAll();
+</script>
+
+</body>
+</html>

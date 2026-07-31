@@ -111,6 +111,17 @@
     text-align: center;
     margin-top: 8px;
   }
+  .stats-link {
+    display: block;
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #b8a892;
+    text-decoration: none;
+    border-top: 1px solid #2a2119;
+    padding-top: 14px;
+  }
+  .stats-link:active { color: #D85A30; }
 </style>
 </head>
 <body>
@@ -135,6 +146,7 @@
     </div>
     <button id="drawBtn">🎲 抽签</button>
     <div id="stats" class="stats"></div>
+    <a href="/stats.html" class="stats-link">📊 查看统计</a>
   </div>
 </div>
 
@@ -159,6 +171,21 @@ const statsEl = document.getElementById('stats');
 let countdownId = null;
 let currentPick = null;
 let currentLogId = null; // 当前这一轮抽签在数据库里对应的记录 id（pending状态）
+
+const POOL_KEY = 'lottery_pool';
+
+// 备选池持久化：用户编辑文本框的内容实时存进 localStorage，
+// 页面刷新/重新打开时优先读取上次保存的内容，而不是每次都还原成默认那7项。
+function savePool() {
+  localStorage.setItem(POOL_KEY, pool.value);
+}
+
+(function restorePoolOnLoad() {
+  const saved = localStorage.getItem(POOL_KEY);
+  if (saved !== null) pool.value = saved;
+})();
+
+pool.addEventListener('input', savePool);
 
 function getItems() {
   return pool.value.split('\n').map(s => s.trim()).filter(Boolean);
