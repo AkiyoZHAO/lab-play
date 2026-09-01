@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽卡 · lab-play</title>
+<link rel="stylesheet" href="../../design/tokens.css">
+<style>
+  /* 抽卡 play 骨架。本轮只占位，真实玩法（分档抽卡 / 倒计时 / 动画）留待后续。
+     所有取值来自 design/tokens.css。 */
+  .shell {
+    max-width: var(--content-narrow);
+    margin: 0 auto;
+    padding: var(--sp-7) var(--sp-5);
+  }
+  .back {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .back:hover { color: var(--c-text); }
+  h1 {
+    font-family: var(--font-serif);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    margin: var(--sp-6) 0 var(--sp-4);
+  }
+  .placeholder {
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-xl);
+    padding: var(--sp-8) var(--sp-5);
+    text-align: center;
+    color: var(--c-text-muted);
+    box-shadow: var(--shadow-sm);
+  }
+  .placeholder .icon { font-size: var(--fs-2xl); color: var(--c-accent); }
+  .placeholder p { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <a class="back" href="../../index.html">← 返回主菜单</a>
+  <h1>抽卡</h1>
+  <div class="placeholder">
+    <div class="icon">◈</div>
+    <p>玩法骨架 · 待实现<br>分档抽卡 / 倒计时 / 完成反馈将在后续轮次落地</p>
+  </div>
+</div>
+<script type="module">
+// 待实现：抽中后 logEvent('draw', 'draw_pending', {...})；反馈后 updateEvent(id, {...})
+// 见本目录 README.md 与 core/events.js。启用时需先引 supabase-js CDN：
+//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+// import { logEvent, updateEvent } from '../../core/events.js';
+</script>
+</body>
+</html>

@@ -2,381 +2,126 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>bless</title>
-<link rel="apple-touch-icon" href="icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="抽签">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lab-play</title>
+<link rel="stylesheet" href="design/tokens.css">
 <style>
-  * { box-sizing: border-box; }
-  body {
+  /* 主菜单骨架样式。本轮只求“基调可见、结构清晰”，精美真 UI 留待后续。
+     所有取值来自 design/tokens.css，本文件不写死颜色/间距。 */
+  .shell {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--sp-9) var(--sp-5) var(--sp-8);
+  }
+  .masthead {
+    margin-bottom: var(--sp-8);
+  }
+  .masthead h1 {
+    font-family: var(--font-serif);
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    margin: 0 0 var(--sp-3);
+  }
+  .masthead p {
     margin: 0;
-    min-height: 100vh;
-    background: #1a1410;
-    color: #f5f0e8;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
+    max-width: var(--content-narrow);
+    color: var(--c-text-muted);
+    font-size: var(--fs-lg);
+    line-height: var(--lh-base);
   }
-  .card {
-    width: 100%;
-    max-width: 400px;
+  .section-label {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--c-text-faint);
+    margin: var(--sp-7) 0 var(--sp-4);
   }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    font-size: 14px;
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid #4a3d30;
-    background: #2a2119;
-    color: #f5f0e8;
-    resize: vertical;
-    font-family: inherit;
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--sp-4);
   }
-  .pool-label {
-    font-size: 13px;
-    color: #b8a892;
-    margin-bottom: 6px;
-  }
-  .stage {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding: 2rem 0 1rem;
-  }
-  .box {
-    width: 160px;
-    height: 160px;
-    border-radius: 24px;
-    background: #FAECE7;
-    border: 3px solid #D85A30;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 56px;
-    color: #993C1D;
-    transition: transform 0.08s;
-  }
-  .result {
-    font-size: 26px;
-    font-weight: 600;
-    min-height: 34px;
-    text-align: center;
-  }
-  .timer {
-    font-size: 44px;
-    font-weight: 600;
-    display: none;
-    color: #FF7A45;
-  }
-  .feedback {
-    display: none;
-    gap: 12px;
-  }
-  button {
-    font-family: inherit;
-    border-radius: 10px;
-    padding: 10px 20px;
-    font-size: 15px;
-    cursor: pointer;
-  }
-  #drawBtn {
-    font-weight: 600;
-    font-size: 17px;
-    padding: 14px 36px;
-    background: #D85A30;
-    color: #fff;
-    border: none;
-  }
-  #drawBtn:active { transform: scale(0.96); }
-  #doneBtn {
-    background: #3B6D11;
-    color: #fff;
-    border: none;
-  }
-  #skipDoneBtn {
-    background: #A32D2D;
-    color: #fff;
-    border: none;
-  }
-  .stats {
-    font-size: 13px;
-    color: #b8a892;
-    text-align: center;
-    margin-top: 8px;
-  }
-  .stats-link {
+  .entry {
     display: block;
-    text-align: center;
-    margin-top: 16px;
-    font-size: 13px;
-    color: #b8a892;
-    text-decoration: none;
-    border-top: 1px solid #2a2119;
-    padding-top: 14px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out),
+                transform var(--dur-base) var(--ease-out);
   }
-  .stats-link:active { color: #D85A30; }
+  .entry:hover {
+    border-color: var(--c-line-strong);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .entry-icon {
+    font-size: var(--fs-xl);
+    color: var(--c-accent);
+    line-height: 1;
+  }
+  .entry-name {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-medium);
+    margin: var(--sp-3) 0 var(--sp-2);
+  }
+  .entry-desc {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    margin: 0;
+  }
+  .tag-wip {
+    display: inline-block;
+    margin-top: var(--sp-3);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--c-accent);
+    background: var(--c-accent-soft);
+    padding: 2px var(--sp-2);
+    border-radius: var(--radius-full);
+  }
 </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="pool-label">备选池（可编辑，每行一项）</div>
-  <textarea id="pool" rows="7">弹钢琴
-唱歌
-雅思单词
-看书
-画画
-涂指甲油
-收拾屋子</textarea>
+<div class="shell">
+  <header class="masthead">
+    <h1>lab · play</h1>
+    <p>一个属于自己的游戏系统。把散落的“想做点什么”收敛成可玩、可回顾的玩法。</p>
+  </header>
 
-  <div class="stage">
-    <div id="box" class="box">🎁</div>
-    <div id="result" class="result"></div>
-    <div id="timer" class="timer"></div>
-    <div id="feedback" class="feedback">
-      <button id="doneBtn">✓ 做了</button>
-      <button id="skipDoneBtn">✕ 没做</button>
-    </div>
-    <button id="drawBtn">🎲 抽签</button>
-    <div id="stats" class="stats"></div>
-    <a href="stats.html" class="stats-link">📊 查看统计</a>
-  </div>
+  <div class="section-label">玩法 · plays</div>
+  <div class="grid" id="playsGrid"></div>
+
+  <div class="section-label">账本视图 · views</div>
+  <div class="grid" id="viewsGrid"></div>
 </div>
 
-<script>
-// ==== 在这里填入你的 Supabase 项目信息（见 README.md）====
-const SUPABASE_URL = 'https://biiarbusbmdnqyjfnhax.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_gKU7fggwQQX73nVZnApvxg_QdeH438A';
-// ==========================================================
-
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const pool = document.getElementById('pool');
-const box = document.getElementById('box');
-const result = document.getElementById('result');
-const timerEl = document.getElementById('timer');
-const drawBtn = document.getElementById('drawBtn');
-const feedback = document.getElementById('feedback');
-const doneBtn = document.getElementById('doneBtn');
-const skipDoneBtn = document.getElementById('skipDoneBtn');
-const statsEl = document.getElementById('stats');
-
-let countdownId = null;
-let currentPick = null;
-let currentLogId = null; // 当前这一轮抽签在数据库里对应的记录 id（pending状态）
-
-const POOL_KEY = 'lottery_pool';
-
-// 备选池持久化：用户编辑文本框的内容实时存进 localStorage，
-// 页面刷新/重新打开时优先读取上次保存的内容，而不是每次都还原成默认那7项。
-function savePool() {
-  localStorage.setItem(POOL_KEY, pool.value);
+<script type="module">
+// 主菜单由 plays.json 清单驱动：新增一个 play 只需在 plays.json 加一行，
+// 这里自动渲染出入口，无需改动本文件。（见 AGENTS.md「如何新增一个 play」）
+async function render() {
+  const data = await fetch('plays.json').then(r => r.json());
+  fill('playsGrid', data.plays || []);
+  fill('viewsGrid', data.views || []);
 }
 
-(function restorePoolOnLoad() {
-  const saved = localStorage.getItem(POOL_KEY);
-  if (saved !== null) pool.value = saved;
-})();
-
-pool.addEventListener('input', savePool);
-
-function getItems() {
-  return pool.value.split('\n').map(s => s.trim()).filter(Boolean);
+function fill(gridId, items) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = items.map(it => `
+    <a class="entry" href="${it.path}">
+      <div class="entry-icon">${it.icon || '◇'}</div>
+      <div class="entry-name">${it.name}</div>
+      <p class="entry-desc">${it.desc || ''}</p>
+      ${it.status === 'wip' ? '<span class="tag-wip">开发中</span>' : ''}
+    </a>
+  `).join('');
 }
 
-// 抽签的瞬间调用：立刻插入一条 pending 记录，返回这条记录的 id。
-// 这样即使用户中途关掉网页、换设备，数据库里也已经留下了“抽过这一签”的痕迹，
-// 不会因为没等到“完成/没做”的反馈就彻底丢失这次抽签的历史。
-async function createPendingLog(activity) {
-  if (!db) return null;
-  try {
-    const { data, error } = await db.from('lottery_log')
-      .insert({ activity: activity, status: 'pending' })
-      .select('id')
-      .single();
-    if (error) throw error;
-    return data.id;
-  } catch (e) {
-    console.error('创建抽签记录失败', e);
-    return null;
-  }
-}
-
-// 反馈阶段调用：把之前插入的 pending 记录更新成 done/skip，而不是新插入一条。
-async function updateLogStatus(logId, status) {
-  if (!db || !logId) return;
-  try {
-    await db.from('lottery_log').update({ status: status }).eq('id', logId);
-  } catch (e) {
-    console.error('更新抽签记录失败', e);
-  }
-}
-
-async function renderStats() {
-  if (!db) {
-    statsEl.textContent = '未连接数据库（见 README 配置 Supabase）';
-    return;
-  }
-  try {
-    const { data, error } = await db.from('lottery_log').select('status');
-    if (error) throw error;
-    const done = data.filter(r => r.status === 'done').length;
-    const skipped = data.filter(r => r.status === 'skip').length;
-    const pending = data.filter(r => r.status === 'pending').length;
-    const parts = [];
-    if (done > 0) parts.push('完成 ' + done + ' 次');
-    if (skipped > 0) parts.push('跳过 ' + skipped + ' 次');
-    if (pending > 0) parts.push('待反馈 ' + pending + ' 次');
-    statsEl.textContent = parts.join('，');
-  } catch (e) {
-    statsEl.textContent = '统计加载失败';
-  }
-}
-
-const DEADLINE_KEY = 'lottery_deadline';
-const PICK_KEY = 'lottery_pick';
-const LOGID_KEY = 'lottery_log_id';
-
-function stopTimer() {
-  if (countdownId) { clearInterval(countdownId); countdownId = null; }
-  localStorage.removeItem(DEADLINE_KEY);
-}
-
-// “完成/没做”两个按钮点完之后调用：把界面彻底恢复到初始状态，
-// 同时清掉本地存储里残留的 pick 记录，这样重新抽签、或者中途刷新页面，
-// 都不会把已经处理完的这一轮误当成还没处理的“待反馈”状态。
-function resetToIdle() {
-  stopTimer();
-  localStorage.removeItem(PICK_KEY);
-  localStorage.removeItem(LOGID_KEY);
-  currentPick = null;
-  currentLogId = null;
-  timerEl.style.display = 'none';
-  feedback.style.display = 'none';
-  drawBtn.style.display = 'inline-block';
-}
-
-function onTimerFinished() {
-  stopTimer();
-  timerEl.textContent = '时间到';
-  feedback.style.display = 'flex';
-  drawBtn.style.display = 'none';
-}
-
-// 核心：不再靠“每秒减1”累计计数，而是记录一个绝对的“结束时间点”，
-// 每次渲染都用“当前真实时间”去减这个结束时间点。
-// 这样即使手机锁屏/切后台导致 setInterval 被系统暂停几分钟，
-// 只要页面重新活跃，一算真实时间差就能立刻得到正确的剩余秒数，不会累积误差。
-function tick() {
-  const deadline = Number(localStorage.getItem(DEADLINE_KEY));
-  if (!deadline) return;
-  const remainingMs = deadline - Date.now();
-  if (remainingMs <= 0) {
-    onTimerFinished();
-    return;
-  }
-  const remaining = Math.ceil(remainingMs / 1000);
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  timerEl.textContent = m + ':' + String(s).padStart(2, '0');
-}
-
-function startTimer(minutes) {
-  stopTimer();
-  const deadline = Date.now() + minutes * 60 * 1000;
-  localStorage.setItem(DEADLINE_KEY, String(deadline));
-  timerEl.style.display = 'block';
-  tick();
-  countdownId = setInterval(tick, 1000);
-}
-
-// 页面从后台切回前台时（比如解锁手机、切回这个标签页），
-// 立刻强制刷新一次倒计时，不用等 setInterval 慢慢恢复。
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    tick();
-  }
-});
-
-// 页面刚打开时，如果发现之前有未结束的倒计时（比如网页被杀后重新打开），
-// 自动恢复倒计时显示状态和当时抽到的项目，而不是让它们凭空消失。
-(function restoreTimerOnLoad() {
-  const deadline = Number(localStorage.getItem(DEADLINE_KEY));
-  const savedPick = localStorage.getItem(PICK_KEY);
-  const savedLogId = localStorage.getItem(LOGID_KEY);
-  if (!deadline) return;
-  currentPick = savedPick || null;
-  currentLogId = savedLogId || null;
-  result.textContent = currentPick || '';
-  if (deadline <= Date.now()) {
-    onTimerFinished();
-  } else {
-    timerEl.style.display = 'block';
-    tick();
-    countdownId = setInterval(tick, 1000);
-  }
-})();
-
-drawBtn.addEventListener('click', () => {
-  const items = getItems();
-  if (items.length === 0) return;
-  stopTimer();
-  currentLogId = null;
-  timerEl.style.display = 'none';
-  feedback.style.display = 'none';
-  drawBtn.style.display = 'inline-block';
-  result.textContent = '';
-  let spins = 0;
-  const maxSpins = 20;
-  const spinId = setInterval(() => {
-    const pick = items[Math.floor(Math.random() * items.length)];
-    currentPick = pick;
-    result.textContent = pick;
-    const scale = 1 + (spins % 3) * 0.09;
-    const rot = (spins % 2 === 0 ? 1 : -1) * (7 - spins * 0.2);
-    box.style.transform = 'scale(' + scale + ') rotate(' + rot + 'deg)';
-    spins += 1;
-    if (spins >= maxSpins) {
-      clearInterval(spinId);
-      box.style.transform = 'scale(1.2) rotate(0deg)';
-      setTimeout(() => { box.style.transform = 'scale(1) rotate(0deg)'; }, 150);
-      localStorage.setItem(PICK_KEY, currentPick);
-      startTimer(30);
-      // 抽签结果一确定，立刻插入 pending 记录（不等倒计时/反馈），
-      // 保证这次抽签本身一定会被数据库记住。
-      createPendingLog(currentPick).then(id => {
-        currentLogId = id;
-        if (id) localStorage.setItem(LOGID_KEY, id);
-        renderStats();
-      });
-    }
-  }, 75);
-});
-
-doneBtn.addEventListener('click', async () => {
-  const finishedPick = currentPick;
-  await updateLogStatus(currentLogId, 'done');
-  await renderStats();
-  resetToIdle();
-  result.textContent = '完成：' + finishedPick;
-});
-
-skipDoneBtn.addEventListener('click', async () => {
-  const finishedPick = currentPick;
-  await updateLogStatus(currentLogId, 'skip');
-  await renderStats();
-  resetToIdle();
-  result.textContent = '没做：' + finishedPick;
-});
-
-renderStats();
+render();
 </script>
 
 </body>

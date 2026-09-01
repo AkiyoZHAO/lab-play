@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>统计 · lab-play</title>
+<link rel="stylesheet" href="../../design/tokens.css">
+<style>
+  /* 统计视图骨架。本轮只占位，图表在后续轮次落地。取值来自 design/tokens.css。 */
+  .shell {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--sp-7) var(--sp-5);
+  }
+  .back {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .back:hover { color: var(--c-text); }
+  h1 {
+    font-family: var(--font-serif);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    margin: var(--sp-6) 0 var(--sp-4);
+  }
+  .placeholder {
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-xl);
+    padding: var(--sp-8) var(--sp-5);
+    text-align: center;
+    color: var(--c-text-muted);
+    box-shadow: var(--shadow-sm);
+  }
+  .placeholder .icon { font-size: var(--fs-2xl); color: var(--c-accent); }
+  .placeholder p { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <a class="back" href="../../index.html">← 返回主菜单</a>
+  <h1>统计</h1>
+  <div class="placeholder">
+    <div class="icon">▤</div>
+    <p>账本视图骨架 · 待实现<br>基于所有 play 产生的 events 计算趋势 / 占比 / 排行</p>
+  </div>
+</div>
+<script type="module">
+// 待实现：queryEvents({...}) 拉全量事件，在前端聚合出图表。启用时需先引 supabase-js CDN：
+//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+// import { queryEvents } from '../../core/events.js';
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "plays": [
+    {
+      "id": "draw",
+      "name": "抽卡",
+      "desc": "决策疲劳时，随机抽一件“有点意思但不想设为每日任务”的事来做。",
+      "icon": "◈",
+      "path": "plays/draw/",
+      "status": "wip"
+    }
+  ],
+  "views": [
+    {
+      "id": "stats",
+      "name": "统计",
+      "desc": "所有玩法留下的痕迹汇总——看看这段时间其实做了什么。",
+      "icon": "▤",
+      "path": "views/stats/",
+      "status": "wip"
+    }
+  ]
+}
