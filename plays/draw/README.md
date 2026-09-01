@@ -1,29 +1,53 @@
 # 抽卡 play（draw）
 
-> 状态：**骨架待实现**。本文件说明这个玩法的意图和它与账本（events）的关系，供后续轮次落地。
+> 状态：**核心玩法已实现**（分档抽卡 + 倒计时 + 两段式写 events）。代币展示、图鉴留待后续轮次。
 
-## 玩法意图
+## 玩法
 
-对抗决策疲劳的随机触发器：不知道现在想干嘛、又不想刷手机时，随机抽一件「有点意思但不想设为每日任务」的事来做（弹琴、唱歌、看书、画画……），配一个倒计时陪你做完。
+对抗决策疲劳的随机触发器：先选「现在有多少电」（能量档），再在该档随机抽一张活动卡，配倒计时陪你做完。
 
-## 计划中的机制（下一轮实现）
+**分档（扭蛋稀有度）**：活动按体力/心力消耗分档，抽卡前先选档，避免「只剩 5 分钟电却抽到 30 分钟任务」的错配。
 
-- **按能量/时长分档抽卡**（R/SR/SSR），先选当前能量档 → 再在档内随机，避免「只剩 5 分钟电却抽到 30 分钟任务」的错配。具体档位阈值和活动清单由用户定。
-- **倒计时**：抽中后陪跑一段时间；需保留原实现里「记录绝对结束时间点、切后台不失准」的做法。
-- **两段式反馈**：抽中即记录，反馈后更新状态（见下）。
+| 档位 | 时长 | 完成代币 |
+|---|---|---|
+| R（低消耗） | 5 min | 5 |
+| SR（中消耗） | 15 min | 15 |
+| SSR（高消耗） | 30 min | 30 |
+
+**时间代币**：完成一张卡，按卡面时长记账，**1 分钟 = 1 代币**。代币和某活动的累计时长都从 events 表算出来（本轮已把 `duration` 写进 payload，展示/图鉴留待下轮）。
+
+## 配置卡池
+
+各档放哪些活动、时长多少，全在 [`cards.json`](cards.json)。改活动 = 改这个文件，不动代码：
+
+```json
+{ "tiers": [ { "id": "R", "duration": 5, "desc": "低消耗 · 5 分钟", "activities": ["…"] }, … ] }
+```
+
+`duration` 单位分钟，既是倒计时时长，也是完成后写入 payload 的代币数（1:1）。
 
 ## 与 events 的关系
 
 一律通过 [`core/events.js`](../../core/events.js) 读写，不自己建 Supabase client。
 
-| 时机 | 调用 | type | payload 示例 |
+| 时机 | 调用 | type | payload |
 |---|---|---|---|
-| 抽中的瞬间 | `logEvent('draw', 'draw_pending', {...})` | `draw_pending` | `{ "activity": "弹钢琴", "tier": "SR" }` |
-| 反馈「做了」 | `updateEvent(id, { type: 'draw_done', payload })` | `draw_done` | `{ "activity": "弹钢琴", "tier": "SR", "duration": 30 }` |
-| 反馈「没做」 | `updateEvent(id, { type: 'draw_skip', payload })` | `draw_skip` | 同上 |
+| 抽中的瞬间 | `logEvent('draw','draw_pending',payload)` | `draw_pending` | `{ tier, activity, duration }` |
+| 反馈「做了」 | `updateEvent(id,{type:'draw_done',payload})` | `draw_done` | 同上 |
+| 反馈「没做」 | `updateEvent(id,{type:'draw_skip',payload})` | `draw_skip` | 同上 |
 
-两段式的意义：抽中瞬间就落一条 `draw_pending`，即使中途关页面/换设备，也不会丢失「抽过这一签」的痕迹。
+两段式：抽中瞬间就落一条 `draw_pending`，即使中途关页面/换设备也不丢这次抽卡的痕迹；反馈时更新这条记录的 type，而非新插一条。
+
+## 实现要点
+
+- **倒计时抗后台失准**：记录绝对结束时间点，每次用真实时间差算剩余，切后台/锁屏回来不累积误差。
+- **刷新/被杀恢复**：页面打开时读 localStorage，若有未结束的一轮，自动恢复到抽卡阶段。
 
 ## 视觉约束
 
-遵守 [`design/DESIGN.md`](../../design/DESIGN.md)：只引 `design/tokens.css`，中性 light 雅致基调，一个界面一个焦点，动效慢而柔。抽卡动画要克制，不做浮夸弹跳。
+遵守 [`design/DESIGN.md`](../../design/DESIGN.md)：只引 `design/tokens.css`，中性 light 雅致，抽卡动画克制。
+
+## 待实现（下一轮）
+
+- 时间代币的累计展示（读 events 算）
+- 图鉴/成就点亮（如「钢琴家 Lv1 = 累计弹满 5h」，读 events 扫描规则）

@@ -2,16 +2,17 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>抽卡 · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* 抽卡 play 骨架。本轮只占位，真实玩法（分档抽卡 / 倒计时 / 动画）留待后续。
-     所有取值来自 design/tokens.css。 */
+  /* 抽卡玩法。三阶段单页流程：选档 → 抽卡+倒计时 → 反馈。
+     所有取值来自 design/tokens.css，本文件不写死颜色/间距/字号。 */
   .shell {
     max-width: var(--content-narrow);
     margin: 0 auto;
-    padding: var(--sp-7) var(--sp-5);
+    padding: var(--sp-7) var(--sp-5) var(--sp-8);
   }
   .back {
     font-size: var(--fs-sm);
@@ -24,35 +25,396 @@
     font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
     letter-spacing: var(--ls-tight);
-    margin: var(--sp-6) 0 var(--sp-4);
+    margin: var(--sp-6) 0 var(--sp-2);
   }
-  .placeholder {
+  .subtitle {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    margin: 0 0 var(--sp-7);
+  }
+
+  /* 阶段切换：默认隐藏，加 .active 显示 */
+  .stage { display: none; }
+  .stage.active { display: block; animation: fade var(--dur-slow) var(--ease-out); }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---- 选档阶段 ---- */
+  .tier-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .tier-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    width: 100%;
+    text-align: left;
     background: var(--c-surface);
     border: 1px solid var(--c-line);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out),
+                transform var(--dur-base) var(--ease-out);
+  }
+  .tier-card:hover {
+    border-color: var(--c-accent);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .tier-badge {
+    font-family: var(--font-serif);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--c-accent);
+    width: 48px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .tier-info { flex: 1; }
+  .tier-info .name { font-size: var(--fs-base); font-weight: var(--fw-medium); }
+  .tier-info .meta { font-size: var(--fs-sm); color: var(--c-text-muted); margin-top: 2px; }
+  .tier-arrow { color: var(--c-text-faint); font-size: var(--fs-lg); }
+
+  /* ---- 抽卡 / 倒计时阶段 ---- */
+  .draw-stage-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-5);
+    padding: var(--sp-6) 0 var(--sp-4);
+  }
+  .tier-tag {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--c-accent);
+    background: var(--c-accent-soft);
+    padding: 3px var(--sp-3);
+    border-radius: var(--radius-full);
+  }
+  .card-face {
+    width: 200px;
+    height: 200px;
     border-radius: var(--radius-xl);
-    padding: var(--sp-8) var(--sp-5);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line-strong);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-4);
+    text-align: center;
+    font-family: var(--font-serif);
+    font-size: var(--fs-lg);
+    color: var(--c-text);
+    /* 抽卡动画由 JS 逐帧改 transform，这里给一个柔和的过渡基线 */
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+  .result-label {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-medium);
+    min-height: 34px;
+    text-align: center;
+  }
+  .timer {
+    font-family: var(--font-serif);
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    color: var(--c-accent);
+    display: none;
+  }
+
+  /* ---- 按钮 ---- */
+  .btn {
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--sp-3) var(--sp-6);
+    font-size: var(--fs-base);
+    font-weight: var(--fw-medium);
+    transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--c-accent); color: #fff; }
+  .btn-primary:hover { background: var(--c-accent-hover); }
+  .btn-ghost { background: var(--c-surface-alt); color: var(--c-text); border: 1px solid var(--c-line); }
+
+  .feedback { display: none; gap: var(--sp-3); }
+  .feedback.show { display: flex; }
+  .btn-done { background: var(--c-positive); color: #fff; }
+  .btn-skip { background: var(--c-surface-alt); color: var(--c-negative); border: 1px solid var(--c-line); }
+
+  .done-note {
     text-align: center;
     color: var(--c-text-muted);
-    box-shadow: var(--shadow-sm);
+    font-size: var(--fs-sm);
+    min-height: 20px;
   }
-  .placeholder .icon { font-size: var(--fs-2xl); color: var(--c-accent); }
-  .placeholder p { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); }
 </style>
 </head>
 <body>
 <div class="shell">
   <a class="back" href="../../index.html">← 返回主菜单</a>
   <h1>抽卡</h1>
-  <div class="placeholder">
-    <div class="icon">◈</div>
-    <p>玩法骨架 · 待实现<br>分档抽卡 / 倒计时 / 完成反馈将在后续轮次落地</p>
+  <p class="subtitle">先选现在有多少电，再抽一张对应档位的卡。</p>
+
+  <!-- 阶段①：选能量档 -->
+  <div class="stage active" id="stageTier">
+    <div class="tier-list" id="tierList"></div>
+  </div>
+
+  <!-- 阶段②③：抽卡 / 倒计时 / 反馈 -->
+  <div class="stage" id="stageDraw">
+    <div class="draw-stage-inner">
+      <span class="tier-tag" id="tierTag"></span>
+      <div class="card-face" id="cardFace">?</div>
+      <div class="result-label" id="resultLabel"></div>
+      <div class="timer" id="timer"></div>
+
+      <button class="btn btn-primary" id="drawBtn">🎴 抽一张</button>
+
+      <div class="feedback" id="feedback">
+        <button class="btn btn-done" id="doneBtn">✓ 做了</button>
+        <button class="btn btn-skip" id="skipBtn">✕ 没做</button>
+      </div>
+
+      <div class="done-note" id="doneNote"></div>
+      <a class="back" id="changeTier" href="#">← 换个档位</a>
+    </div>
   </div>
 </div>
+
 <script type="module">
-// 待实现：抽中后 logEvent('draw', 'draw_pending', {...})；反馈后 updateEvent(id, {...})
-// 见本目录 README.md 与 core/events.js。启用时需先引 supabase-js CDN：
-//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-// import { logEvent, updateEvent } from '../../core/events.js';
+import { logEvent, updateEvent } from '../../core/events.js';
+
+// ---------- 状态 ----------
+let tiers = [];          // 从 cards.json 读入的档位配置
+let currentTier = null;  // 当前选中的档位对象 { id, duration, activities, ... }
+let currentPick = null;  // 当前抽中的活动名
+let currentLogId = null; // 当前这一轮在 events 表里的记录 id（draw_pending）
+let countdownId = null;
+
+// localStorage：记录“进行中的一轮”，页面刷新/被杀后能恢复。
+// 沿用旧实现的 key 语义，新增 tier。
+const LS = {
+  deadline: 'draw_deadline',
+  pick: 'draw_pick',
+  logId: 'draw_log_id',
+  tier: 'draw_tier',
+};
+
+// ---------- DOM ----------
+const stageTier = document.getElementById('stageTier');
+const stageDraw = document.getElementById('stageDraw');
+const tierList = document.getElementById('tierList');
+const tierTag = document.getElementById('tierTag');
+const cardFace = document.getElementById('cardFace');
+const resultLabel = document.getElementById('resultLabel');
+const timerEl = document.getElementById('timer');
+const drawBtn = document.getElementById('drawBtn');
+const feedback = document.getElementById('feedback');
+const doneBtn = document.getElementById('doneBtn');
+const skipBtn = document.getElementById('skipBtn');
+const doneNote = document.getElementById('doneNote');
+const changeTier = document.getElementById('changeTier');
+
+// ---------- 初始化 ----------
+async function init() {
+  const data = await fetch('cards.json').then(r => r.json());
+  tiers = data.tiers || [];
+  renderTierList();
+  restoreInProgress(); // 若有未结束的一轮，恢复到抽卡阶段
+}
+
+function renderTierList() {
+  tierList.innerHTML = tiers.map(t => `
+    <button class="tier-card" data-tier="${t.id}">
+      <span class="tier-badge">${t.label}</span>
+      <span class="tier-info">
+        <span class="name">${t.desc}</span>
+        <span class="meta">${t.activities.length} 个活动 · 完成得 ${t.duration} 代币</span>
+      </span>
+      <span class="tier-arrow">→</span>
+    </button>
+  `).join('');
+  tierList.querySelectorAll('.tier-card').forEach(btn => {
+    btn.addEventListener('click', () => selectTier(btn.dataset.tier));
+  });
+}
+
+function selectTier(tierId) {
+  currentTier = tiers.find(t => t.id === tierId);
+  if (!currentTier) return;
+  tierTag.textContent = `${currentTier.label} · ${currentTier.desc}`;
+  resetDrawStage();
+  showStage('draw');
+}
+
+// ---------- 阶段切换 ----------
+function showStage(which) {
+  stageTier.classList.toggle('active', which === 'tier');
+  stageDraw.classList.toggle('active', which === 'draw');
+}
+
+// 把抽卡阶段恢复到“还没抽”的初始态
+function resetDrawStage() {
+  stopTimer();
+  currentPick = null;
+  currentLogId = null;
+  cardFace.textContent = '?';
+  cardFace.style.transform = 'none';
+  resultLabel.textContent = '';
+  doneNote.textContent = '';
+  timerEl.style.display = 'none';
+  feedback.classList.remove('show');
+  drawBtn.style.display = 'inline-block';
+  changeTier.style.display = 'inline-block';
+}
+
+// ---------- 抽卡 ----------
+drawBtn.addEventListener('click', () => {
+  if (!currentTier) return;
+  const acts = currentTier.activities;
+  if (acts.length === 0) return;
+
+  drawBtn.style.display = 'none';
+  changeTier.style.display = 'none';
+  resultLabel.textContent = '';
+
+  // 抽卡动画：快速轮播若干活动名，逐渐减速定格。克制的缩放，不做浮夸弹跳。
+  let spins = 0;
+  const maxSpins = 18;
+  const spinId = setInterval(() => {
+    const pick = acts[Math.floor(Math.random() * acts.length)];
+    currentPick = pick;
+    cardFace.textContent = pick;
+    const scale = 1 + (spins % 3) * 0.04;
+    cardFace.style.transform = `scale(${scale})`;
+    spins += 1;
+    if (spins >= maxSpins) {
+      clearInterval(spinId);
+      cardFace.style.transform = 'scale(1.06)';
+      setTimeout(() => { cardFace.style.transform = 'scale(1)'; }, 160);
+      onDrawn();
+    }
+  }, 70);
+});
+
+// 抽中定格后：写 pending、存本地、起倒计时
+async function onDrawn() {
+  resultLabel.textContent = currentPick;
+  // 抽中瞬间就落一条 pending，即使中途关页面也不会丢这次抽卡的痕迹。
+  const payload = { tier: currentTier.id, activity: currentPick, duration: currentTier.duration };
+  startTimer(currentTier.duration);
+  localStorage.setItem(LS.pick, currentPick);
+  localStorage.setItem(LS.tier, currentTier.id);
+  try {
+    const rec = await logEvent('draw', 'draw_pending', payload);
+    currentLogId = rec.id;
+    localStorage.setItem(LS.logId, rec.id);
+  } catch (e) {
+    console.error('写入 pending 失败', e);
+  }
+}
+
+// ---------- 倒计时（抗后台失准）----------
+// 核心：记录一个绝对的“结束时间点”，每次渲染用当前真实时间去减它，
+// 而不是每秒累减。这样手机锁屏/切后台导致 setInterval 被暂停后，
+// 页面重新活跃时一算真实时间差就能立刻得到正确剩余，不会累积误差。
+function startTimer(minutes) {
+  stopTimer();
+  const deadline = Date.now() + minutes * 60 * 1000;
+  localStorage.setItem(LS.deadline, String(deadline));
+  timerEl.style.display = 'block';
+  tick();
+  countdownId = setInterval(tick, 1000);
+}
+
+function tick() {
+  const deadline = Number(localStorage.getItem(LS.deadline));
+  if (!deadline) return;
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) { onTimerFinished(); return; }
+  const remaining = Math.ceil(remainingMs / 1000);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  timerEl.textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+function stopTimer() {
+  if (countdownId) { clearInterval(countdownId); countdownId = null; }
+  localStorage.removeItem(LS.deadline);
+}
+
+function onTimerFinished() {
+  stopTimer();
+  timerEl.textContent = '时间到';
+  feedback.classList.add('show');
+}
+
+// 切回前台立即刷新一次，不用等 setInterval 慢慢恢复。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') tick();
+});
+
+// ---------- 反馈：更新 pending 那条记录，而非新插一条 ----------
+async function feedbackDone(status) {
+  const finished = currentPick;
+  const payload = { tier: currentTier?.id, activity: finished, duration: currentTier?.duration };
+  try {
+    if (currentLogId) await updateEvent(currentLogId, { type: status, payload });
+  } catch (e) {
+    console.error('更新反馈失败', e);
+  }
+  clearInProgress();
+  resetDrawStage();
+  doneNote.textContent = (status === 'draw_done' ? '完成：' : '没做：') + finished
+    + (status === 'draw_done' ? `（+${payload.duration} 代币）` : '');
+}
+
+doneBtn.addEventListener('click', () => feedbackDone('draw_done'));
+skipBtn.addEventListener('click', () => feedbackDone('draw_skip'));
+
+changeTier.addEventListener('click', (e) => {
+  e.preventDefault();
+  clearInProgress();
+  resetDrawStage();
+  showStage('tier');
+});
+
+// ---------- 进行中一轮的持久化 ----------
+function clearInProgress() {
+  stopTimer();
+  localStorage.removeItem(LS.pick);
+  localStorage.removeItem(LS.logId);
+  localStorage.removeItem(LS.tier);
+}
+
+// 页面打开时若有未结束的一轮，恢复到抽卡阶段（含倒计时状态）
+function restoreInProgress() {
+  const deadline = Number(localStorage.getItem(LS.deadline));
+  const savedTier = localStorage.getItem(LS.tier);
+  if (!deadline || !savedTier) return;
+  currentTier = tiers.find(t => t.id === savedTier);
+  if (!currentTier) return;
+  currentPick = localStorage.getItem(LS.pick) || null;
+  currentLogId = localStorage.getItem(LS.logId) || null;
+
+  tierTag.textContent = `${currentTier.label} · ${currentTier.desc}`;
+  cardFace.textContent = currentPick || '?';
+  resultLabel.textContent = currentPick || '';
+  drawBtn.style.display = 'none';
+  changeTier.style.display = 'inline-block';
+  showStage('draw');
+
+  if (deadline <= Date.now()) {
+    onTimerFinished();
+  } else {
+    timerEl.style.display = 'block';
+    tick();
+    countdownId = setInterval(tick, 1000);
+  }
+}
+
+init();
 </script>
 </body>
 </html>
