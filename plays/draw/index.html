@@ -286,6 +286,9 @@ drawBtn.addEventListener('click', () => {
   const acts = currentTier.activities;
   if (acts.length === 0) return;
 
+  // 重抽即打断上一轮：若存在进行中的 pending，先标记为 skip（打断 = 没做）。
+  abortPendingAsSkip();
+
   drawBtn.style.display = 'none';
   changeTier.style.display = 'none';
   resultLabel.textContent = '';
@@ -393,10 +396,24 @@ skipBtn.addEventListener('click', () => feedbackDone('draw_skip'));
 
 changeTier.addEventListener('click', (e) => {
   e.preventDefault();
+  // 换档即打断当前这一轮：进行中的 pending 标记为 skip（打断 = 没做）。
+  abortPendingAsSkip();
   clearInProgress();
   resetDrawStage();
   showStage('tier');
 });
+
+// 打断处理：若当前存在一条进行中、尚未反馈的 pending 记录，把它更新为 skip。
+// “进行中”的判据：有 currentLogId，且还没走到反馈（feedback 未显示）。
+// 一旦进入反馈阶段，skip 交给“没做”按钮，避免重复处理。
+function abortPendingAsSkip() {
+  if (!currentLogId) return;
+  if (feedback.classList.contains('show')) return;
+  const payload = { tier: currentTier?.id, activity: currentPick, duration: currentTier?.duration };
+  const id = currentLogId;
+  // 不 await：打断要即时响应 UI，写库在后台完成即可。
+  updateEvent(id, { type: 'draw_skip', payload }).catch(err => console.error('打断标记 skip 失败', err));
+}
 
 // ---------- 进行中一轮的持久化 ----------
 function clearInProgress() {
