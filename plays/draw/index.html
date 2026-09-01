@@ -270,6 +270,17 @@ function resetDrawStage() {
 }
 
 // ---------- 抽卡 ----------
+// 按权重随机抽一个活动：权重越高越常抽到，权重低（如涂指甲油）则罕见。
+function weightedPick(acts) {
+  const total = acts.reduce((sum, a) => sum + (a.weight || 1), 0);
+  let r = Math.random() * total;
+  for (const a of acts) {
+    r -= (a.weight || 1);
+    if (r < 0) return a.name;
+  }
+  return acts[acts.length - 1].name;
+}
+
 drawBtn.addEventListener('click', () => {
   if (!currentTier) return;
   const acts = currentTier.activities;
@@ -279,18 +290,25 @@ drawBtn.addEventListener('click', () => {
   changeTier.style.display = 'none';
   resultLabel.textContent = '';
 
-  // 抽卡动画：快速轮播若干活动名，逐渐减速定格。克制的缩放，不做浮夸弹跳。
+  // 最终结果一开始就按权重定好；动画只是视觉上快速轮播活动名，逐渐减速定格。
+  // 这样罕见度由权重严格保证，不受动画帧数影响。
+  const finalPick = weightedPick(acts);
   let spins = 0;
   const maxSpins = 18;
   const spinId = setInterval(() => {
-    const pick = acts[Math.floor(Math.random() * acts.length)];
-    currentPick = pick;
-    cardFace.textContent = pick;
+    // 动画中途等权轮播（纯视觉），最后一帧定格到 finalPick
+    const shown = spins >= maxSpins - 1
+      ? finalPick
+      : acts[Math.floor(Math.random() * acts.length)].name;
+    currentPick = shown;
+    cardFace.textContent = shown;
     const scale = 1 + (spins % 3) * 0.04;
     cardFace.style.transform = `scale(${scale})`;
     spins += 1;
     if (spins >= maxSpins) {
       clearInterval(spinId);
+      currentPick = finalPick;
+      cardFace.textContent = finalPick;
       cardFace.style.transform = 'scale(1.06)';
       setTimeout(() => { cardFace.style.transform = 'scale(1)'; }, 160);
       onDrawn();
