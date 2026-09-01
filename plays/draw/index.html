@@ -7,12 +7,13 @@
 <link rel="stylesheet" href="../../design/tokens.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* 抽卡玩法。三阶段单页流程：选档 → 抽卡+倒计时 → 反馈。
+  /* 抽卡玩法。三阶段单页流程：选池（2×2 牌背）→ 翻牌+倒计时 → 反馈。
+     游戏感 = 牌背材质 + 稀有度深浅 + 翻牌仪式（见 DESIGN.md 六）。
      所有取值来自 design/tokens.css，本文件不写死颜色/间距/字号。 */
   .shell {
     max-width: var(--content-narrow);
     margin: 0 auto;
-    padding: var(--sp-7) var(--sp-5) var(--sp-8);
+    padding: var(--sp-6) var(--sp-5) var(--sp-8);
   }
   .back {
     font-size: var(--fs-sm);
@@ -20,67 +21,87 @@
     transition: color var(--dur-fast) var(--ease-out);
   }
   .back:hover { color: var(--c-text); }
-  h1 {
-    font-family: var(--font-serif);
-    font-size: var(--fs-xl);
-    font-weight: var(--fw-bold);
-    letter-spacing: var(--ls-tight);
-    margin: var(--sp-6) 0 var(--sp-2);
-  }
-  .subtitle {
-    color: var(--c-text-muted);
-    font-size: var(--fs-sm);
-    margin: 0 0 var(--sp-7);
-  }
 
   /* 阶段切换：默认隐藏，加 .active 显示 */
   .stage { display: none; }
   .stage.active { display: block; animation: fade var(--dur-slow) var(--ease-out); }
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  /* ---- 选档阶段 ---- */
-  .tier-list { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .tier-card {
-    display: flex;
-    align-items: center;
+  /* ---- 选池阶段：2×2 牌背 ---- */
+  .pool-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--sp-4);
-    width: 100%;
-    text-align: left;
-    background: var(--c-surface);
-    border: 1px solid var(--c-line);
+    margin-top: var(--sp-6);
+  }
+  /* 一张牌背：稀有度靠 --rar-* 变量注入（底色深浅 + 描边 + 金属强调线）。
+     具体档位的取值在下面 .pool-card[data-rar=...] 里绑定。 */
+  .pool-card {
+    position: relative;
+    aspect-ratio: 3 / 4;
     border-radius: var(--radius-lg);
-    padding: var(--sp-5);
-    box-shadow: var(--shadow-sm);
-    transition: border-color var(--dur-base) var(--ease-out),
+    background: var(--rar-surface);
+    border: 1px solid var(--rar-line);
+    box-shadow: var(--shadow-sm), inset 0 0 0 1px rgba(255,255,255,0.25);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-5) var(--sp-3) var(--sp-4);
+    overflow: hidden;
+    transition: transform var(--dur-base) var(--ease-out),
                 box-shadow var(--dur-base) var(--ease-out),
-                transform var(--dur-base) var(--ease-out);
+                border-color var(--dur-base) var(--ease-out);
   }
-  .tier-card:hover {
-    border-color: var(--c-accent);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
+  .pool-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,0.3);
+    border-color: var(--rar-glow);
   }
-  .tier-badge {
+  /* 牌背纹样：矢量、用 --rar-ink 走线，稀有度越高越考究 */
+  .pool-glyph {
+    width: 64px;
+    height: 84px;
+    color: var(--rar-ink);
+    opacity: 0.9;
+  }
+  .pool-glyph svg { display: block; width: 100%; height: 100%; }
+  /* 牌名 + 时长：牌面文字用 --rar-ink，保证深底牌（SSR）上也清晰 */
+  .pool-name {
     font-family: var(--font-serif);
     font-size: var(--fs-lg);
     font-weight: var(--fw-bold);
-    color: var(--c-accent);
-    width: 48px;
-    text-align: center;
-    flex-shrink: 0;
+    letter-spacing: var(--ls-tight);
+    color: var(--rar-ink);
   }
-  .tier-info { flex: 1; }
-  .tier-info .name { font-size: var(--fs-base); font-weight: var(--fw-medium); }
-  .tier-info .meta { font-size: var(--fs-sm); color: var(--c-text-muted); margin-top: 2px; }
-  .tier-arrow { color: var(--c-text-faint); font-size: var(--fs-lg); }
+  .pool-meta {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--rar-ink);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+  /* 金属强调线：牌背顶部一根细线，稀有度越高越亮，是“考究”的核心细节 */
+  .pool-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 12%; right: 12%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--rar-glow), transparent);
+  }
+  /* 四档稀有度绑定：全池子=中性墨，R=最浅，SR=中深，SSR=最深 */
+  .pool-card[data-rar="all"] { --rar-surface: var(--rar-all-surface); --rar-line: var(--rar-all-line); --rar-ink: var(--rar-all-ink); --rar-glow: var(--rar-all-glow); }
+  .pool-card[data-rar="R"]   { --rar-surface: var(--rar-r-surface);   --rar-line: var(--rar-r-line);   --rar-ink: var(--rar-r-ink);   --rar-glow: var(--rar-r-glow); }
+  .pool-card[data-rar="SR"]  { --rar-surface: var(--rar-sr-surface);  --rar-line: var(--rar-sr-line);  --rar-ink: var(--rar-sr-ink);  --rar-glow: var(--rar-sr-glow); }
+  .pool-card[data-rar="SSR"] { --rar-surface: var(--rar-ssr-surface); --rar-line: var(--rar-ssr-line); --rar-ink: var(--rar-ssr-ink); --rar-glow: var(--rar-ssr-glow); }
 
-  /* ---- 抽卡 / 倒计时阶段 ---- */
+  /* ---- 翻牌 / 倒计时阶段 ---- */
   .draw-stage-inner {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--sp-5);
-    padding: var(--sp-6) 0 var(--sp-4);
+    padding: var(--sp-5) 0 var(--sp-4);
   }
   .tier-tag {
     font-size: var(--fs-xs);
@@ -91,28 +112,70 @@
     padding: 3px var(--sp-3);
     border-radius: var(--radius-full);
   }
-  .card-face {
-    width: 200px;
-    height: 200px;
+
+  /* 翻牌容器：3D 透视，内部 .flip-inner 绕 Y 轴翻转 */
+  .card-flip {
+    width: 190px;
+    height: 253px;   /* 3:4 牌形 */
+    perspective: 1200px;
+  }
+  .flip-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    /* 翻牌仪式：一次翻转、慢而柔，绝不轮播/闪烁 */
+    transition: transform var(--dur-slow) var(--ease-inout);
+  }
+  .card-flip.revealed .flip-inner { transform: rotateY(180deg); }
+  /* 两面共用底盘：牌背(back) 露正、牌面(front) 预翻 180° */
+  .flip-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
     border-radius: var(--radius-xl);
-    background: var(--c-surface);
-    border: 1px solid var(--c-line-strong);
-    box-shadow: var(--shadow-md);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: var(--sp-4);
     text-align: center;
-    font-family: var(--font-serif);
-    font-size: var(--fs-lg);
-    color: var(--c-text);
-    /* 抽卡动画由 JS 逐帧改 transform，这里给一个柔和的过渡基线 */
-    transition: transform var(--dur-fast) var(--ease-out);
+    overflow: hidden;
   }
-  .result-label {
+  /* 牌背：默认用全池子的中性墨，翻牌前按当前档位覆盖 --rar-* */
+  .flip-back {
+    background: var(--rar-surface, var(--rar-all-surface));
+    border: 1px solid var(--rar-line, var(--rar-all-line));
+    box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,0.25);
+    color: var(--rar-ink, var(--rar-all-ink));
+  }
+  .flip-back::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 14%; right: 14%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--rar-glow, var(--rar-all-glow)), transparent);
+  }
+  .flip-back .pool-glyph { width: 84px; height: 110px; opacity: 0.9; }
+  /* 牌面（翻开后露出的抽中活动）：浅底、衬线大字 */
+  .flip-front {
+    transform: rotateY(180deg);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line-strong);
+    box-shadow: var(--shadow-md);
+    color: var(--c-text);
+    font-family: var(--font-serif);
     font-size: var(--fs-xl);
     font-weight: var(--fw-medium);
-    min-height: 34px;
+    gap: var(--sp-3);
+  }
+  .flip-front .front-glyph { width: 40px; height: 40px; color: var(--c-accent); }
+
+  .result-label {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-medium);
+    color: var(--c-text-muted);
+    min-height: 28px;
     text-align: center;
   }
   .timer {
@@ -142,6 +205,10 @@
   .btn-done { background: var(--c-positive); color: #fff; }
   .btn-skip { background: var(--c-surface-alt); color: var(--c-negative); border: 1px solid var(--c-line); }
 
+  /* 倒计时进行中的操作区：默认隐藏，倒计时时显示 */
+  .running-actions { display: none; gap: var(--sp-3); }
+  .running-actions.show { display: flex; }
+
   .done-note {
     text-align: center;
     color: var(--c-text-muted);
@@ -152,24 +219,40 @@
 </head>
 <body>
 <div class="shell">
-  <a class="back" href="../../index.html">← 返回主菜单</a>
-  <h1>抽卡</h1>
-  <p class="subtitle">先选现在有多少电，再抽一张对应档位的卡。</p>
+  <a class="back" href="../../index.html">← 返回</a>
 
-  <!-- 阶段①：选能量档 -->
+  <!-- 阶段①：选池（2×2 牌背：全池子 / R / SR / SSR） -->
   <div class="stage active" id="stageTier">
-    <div class="tier-list" id="tierList"></div>
+    <div class="pool-grid" id="poolGrid"></div>
   </div>
 
-  <!-- 阶段②③：抽卡 / 倒计时 / 反馈 -->
+  <!-- 阶段②③：翻牌 / 倒计时 / 反馈 -->
   <div class="stage" id="stageDraw">
     <div class="draw-stage-inner">
       <span class="tier-tag" id="tierTag"></span>
-      <div class="card-face" id="cardFace">?</div>
+
+      <div class="card-flip" id="cardFlip">
+        <div class="flip-inner">
+          <div class="flip-face flip-back" id="flipBack">
+            <span class="pool-glyph" id="flipBackGlyph"></span>
+          </div>
+          <div class="flip-face flip-front">
+            <span class="front-glyph" id="frontGlyph"></span>
+            <span id="frontName"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="result-label" id="resultLabel"></div>
       <div class="timer" id="timer"></div>
 
-      <button class="btn btn-primary" id="drawBtn">🎴 抽一张</button>
+      <button class="btn btn-primary" id="drawBtn">翻一张</button>
+
+      <!-- 倒计时进行中的操作：都相当于打断当前这一轮（记为 skip） -->
+      <div class="running-actions" id="runningActions">
+        <button class="btn btn-ghost" id="redrawBtn">↻ 重抽</button>
+        <button class="btn btn-ghost" id="giveUpBtn">放弃这轮</button>
+      </div>
 
       <div class="feedback" id="feedback">
         <button class="btn btn-done" id="doneBtn">✓ 做了</button>
@@ -177,7 +260,7 @@
       </div>
 
       <div class="done-note" id="doneNote"></div>
-      <a class="back" id="changeTier" href="#">← 换个档位</a>
+      <a class="back" id="changeTier" href="#">← 换一池</a>
     </div>
   </div>
 </div>
@@ -186,66 +269,132 @@
 import { logEvent, updateEvent } from '../../core/events.js';
 
 // ---------- 状态 ----------
-let tiers = [];          // 从 cards.json 读入的档位配置
-let currentTier = null;  // 当前选中的档位对象 { id, duration, activities, ... }
-let currentPick = null;  // 当前抽中的活动名
+let tiers = [];          // 从 cards.json 读入的原始档位配置
+let pools = [];          // 选池用的 2×2 池子：全池子 + R + SR + SSR
+let currentPool = null;  // 当前选中的池子对象 { id, label, isAll, activities:[{name,tier,duration,weight}] }
+let currentCard = null;  // 当前抽中的完整卡 { name, tier, duration }（贯穿写库/倒计时/反馈）
 let currentLogId = null; // 当前这一轮在 events 表里的记录 id（draw_pending）
 let countdownId = null;
 
 // localStorage：记录“进行中的一轮”，页面刷新/被杀后能恢复。
-// 沿用旧实现的 key 语义，新增 tier。
+// 沿用旧实现的 key 语义；card 存整张抽中卡（含 tier/duration），
+// 兼容全池子模式下每张卡各自带档位/时长。
 const LS = {
   deadline: 'draw_deadline',
-  pick: 'draw_pick',
+  card: 'draw_card',     // JSON.stringify({name,tier,duration})
   logId: 'draw_log_id',
-  tier: 'draw_tier',
+  pool: 'draw_pool',     // 选中的池子 id（含 'all'）
 };
+
+// 牌背纹样：稀有度越高纹样越考究（用 currentColor=--rar-ink 走线）。
+// 全池子=三重叠牌；R=单牌形；SR=牌形+内框；SSR=牌形+内框+菱星强调。
+const BACK_GLYPHS = {
+  all: `<svg viewBox="0 0 64 84" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+      <rect x="10" y="20" width="30" height="44" rx="4" transform="rotate(-8 25 42)"/>
+      <rect x="20" y="16" width="30" height="44" rx="4" transform="rotate(5 35 38)"/>
+      <rect x="24" y="24" width="26" height="40" rx="4"/>
+    </svg>`,
+  R: `<svg viewBox="0 0 64 84" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+      <rect x="16" y="14" width="32" height="56" rx="5"/>
+      <path d="M32 26 v32 M24 42 h16" stroke-width="1.1"/>
+    </svg>`,
+  SR: `<svg viewBox="0 0 64 84" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+      <rect x="14" y="12" width="36" height="60" rx="5"/>
+      <rect x="21" y="19" width="22" height="46" rx="3" stroke-width="1.1"/>
+      <path d="M32 30 l4 8 -4 8 -4-8 z" stroke-width="1.1"/>
+    </svg>`,
+  SSR: `<svg viewBox="0 0 64 84" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+      <rect x="13" y="11" width="38" height="62" rx="6"/>
+      <rect x="19" y="17" width="26" height="50" rx="4" stroke-width="1.1"/>
+      <path d="M32 24 l5 10 11 1.6 -8 7.6 2 11 -10-5.2 -10 5.2 2-11 -8-7.6 11-1.6 z" stroke-width="1"/>
+    </svg>`,
+};
+// 翻开后牌面的小装饰纹样（中性强调色）
+const FRONT_GLYPH = `<svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M20 4 36 20 20 36 4 20 z"/>
+  </svg>`;
 
 // ---------- DOM ----------
 const stageTier = document.getElementById('stageTier');
 const stageDraw = document.getElementById('stageDraw');
-const tierList = document.getElementById('tierList');
+const poolGrid = document.getElementById('poolGrid');
 const tierTag = document.getElementById('tierTag');
-const cardFace = document.getElementById('cardFace');
+const cardFlip = document.getElementById('cardFlip');
+const flipBack = document.getElementById('flipBack');
+const flipBackGlyph = document.getElementById('flipBackGlyph');
+const frontGlyph = document.getElementById('frontGlyph');
+const frontName = document.getElementById('frontName');
 const resultLabel = document.getElementById('resultLabel');
 const timerEl = document.getElementById('timer');
 const drawBtn = document.getElementById('drawBtn');
+const runningActions = document.getElementById('runningActions');
+const redrawBtn = document.getElementById('redrawBtn');
+const giveUpBtn = document.getElementById('giveUpBtn');
 const feedback = document.getElementById('feedback');
 const doneBtn = document.getElementById('doneBtn');
 const skipBtn = document.getElementById('skipBtn');
 const doneNote = document.getElementById('doneNote');
 const changeTier = document.getElementById('changeTier');
 
+frontGlyph.innerHTML = FRONT_GLYPH;
+
 // ---------- 初始化 ----------
 async function init() {
   const data = await fetch('cards.json').then(r => r.json());
   tiers = data.tiers || [];
-  renderTierList();
+  pools = derivePools(tiers);
+  renderPoolGrid();
   restoreInProgress(); // 若有未结束的一轮，恢复到抽卡阶段
 }
 
-function renderTierList() {
-  tierList.innerHTML = tiers.map(t => `
-    <button class="tier-card" data-tier="${t.id}">
-      <span class="tier-badge">${t.label}</span>
-      <span class="tier-info">
-        <span class="name">${t.desc}</span>
-        <span class="meta">${t.activities.length} 个活动 · 完成得 ${t.duration} 代币</span>
+// 从原始档位派生 2×2 选池：
+// - 每档（R/SR/SSR）的活动都打上自己的 tier/duration。
+// - 全池子（all）= 合并三档所有活动按权重抽；每张自带 tier/duration；
+//   跨档同名保留重复（“看书”在 R/SR/SSR 都出现时，权重叠加、更常抽到，这是刻意的）。
+function derivePools(tiers) {
+  const flatten = t => t.activities.map(a => ({
+    name: a.name, weight: a.weight || 1, tier: t.id, duration: t.duration,
+  }));
+  const allActs = tiers.flatMap(flatten);
+  const all = { id: 'all', label: '全池子', desc: '混抽所有档', isAll: true, activities: allActs };
+  const perTier = tiers.map(t => ({
+    id: t.id, label: t.label, desc: t.desc, isAll: false, duration: t.duration,
+    activities: flatten(t),
+  }));
+  return [all, ...perTier];
+}
+
+function renderPoolGrid() {
+  poolGrid.innerHTML = pools.map(p => `
+    <button class="pool-card" data-rar="${p.id}" data-pool="${p.id}">
+      <span class="pool-glyph">${BACK_GLYPHS[p.id] || BACK_GLYPHS.all}</span>
+      <span>
+        <span class="pool-name">${p.label}</span>
+        <span class="pool-meta">${p.isAll ? '混抽全部' : p.duration + ' 分钟'}</span>
       </span>
-      <span class="tier-arrow">→</span>
     </button>
   `).join('');
-  tierList.querySelectorAll('.tier-card').forEach(btn => {
-    btn.addEventListener('click', () => selectTier(btn.dataset.tier));
+  poolGrid.querySelectorAll('.pool-card').forEach(btn => {
+    btn.addEventListener('click', () => selectPool(btn.dataset.pool));
   });
 }
 
-function selectTier(tierId) {
-  currentTier = tiers.find(t => t.id === tierId);
-  if (!currentTier) return;
-  tierTag.textContent = `${currentTier.label} · ${currentTier.desc}`;
+function selectPool(poolId) {
+  currentPool = pools.find(p => p.id === poolId);
+  if (!currentPool) return;
+  tierTag.textContent = currentPool.isAll ? '全池子 · 混抽' : `${currentPool.label} · ${currentPool.desc}`;
+  applyBackRarity(currentPool.id);
   resetDrawStage();
   showStage('draw');
+}
+
+// 把翻牌阶段的牌背套上所选池子的稀有度色（复用 --rar-*-* 变量）
+function applyBackRarity(poolId) {
+  flipBack.style.setProperty('--rar-surface', `var(--rar-${poolId.toLowerCase()}-surface)`);
+  flipBack.style.setProperty('--rar-line',    `var(--rar-${poolId.toLowerCase()}-line)`);
+  flipBack.style.setProperty('--rar-ink',     `var(--rar-${poolId.toLowerCase()}-ink)`);
+  flipBack.style.setProperty('--rar-glow',    `var(--rar-${poolId.toLowerCase()}-glow)`);
+  flipBackGlyph.innerHTML = BACK_GLYPHS[poolId] || BACK_GLYPHS.all;
 }
 
 // ---------- 阶段切换 ----------
@@ -254,36 +403,38 @@ function showStage(which) {
   stageDraw.classList.toggle('active', which === 'draw');
 }
 
-// 把抽卡阶段恢复到“还没抽”的初始态
+// 把抽卡阶段恢复到“还没翻”的初始态
 function resetDrawStage() {
   stopTimer();
-  currentPick = null;
+  currentCard = null;
   currentLogId = null;
-  cardFace.textContent = '?';
-  cardFace.style.transform = 'none';
+  cardFlip.classList.remove('revealed');
+  frontName.textContent = '';
   resultLabel.textContent = '';
   doneNote.textContent = '';
   timerEl.style.display = 'none';
   feedback.classList.remove('show');
+  runningActions.classList.remove('show');
   drawBtn.style.display = 'inline-block';
   changeTier.style.display = 'inline-block';
 }
 
 // ---------- 抽卡 ----------
-// 按权重随机抽一个活动：权重越高越常抽到，权重低（如涂指甲油）则罕见。
+// 按权重随机抽一张完整卡（含自带 tier/duration）：权重越高越常抽到，
+// 权重低（如涂指甲油）则罕见。全池子模式下在合并池里抽，档位由抽中卡自带。
 function weightedPick(acts) {
   const total = acts.reduce((sum, a) => sum + (a.weight || 1), 0);
   let r = Math.random() * total;
   for (const a of acts) {
     r -= (a.weight || 1);
-    if (r < 0) return a.name;
+    if (r < 0) return a;
   }
-  return acts[acts.length - 1].name;
+  return acts[acts.length - 1];
 }
 
 drawBtn.addEventListener('click', () => {
-  if (!currentTier) return;
-  const acts = currentTier.activities;
+  if (!currentPool) return;
+  const acts = currentPool.activities;
   if (acts.length === 0) return;
 
   // 重抽即打断上一轮：若存在进行中的 pending，先标记为 skip（打断 = 没做）。
@@ -293,40 +444,33 @@ drawBtn.addEventListener('click', () => {
   changeTier.style.display = 'none';
   resultLabel.textContent = '';
 
-  // 最终结果一开始就按权重定好；动画只是视觉上快速轮播活动名，逐渐减速定格。
-  // 这样罕见度由权重严格保证，不受动画帧数影响。
-  const finalPick = weightedPick(acts);
-  let spins = 0;
-  const maxSpins = 18;
-  const spinId = setInterval(() => {
-    // 动画中途等权轮播（纯视觉），最后一帧定格到 finalPick
-    const shown = spins >= maxSpins - 1
-      ? finalPick
-      : acts[Math.floor(Math.random() * acts.length)].name;
-    currentPick = shown;
-    cardFace.textContent = shown;
-    const scale = 1 + (spins % 3) * 0.04;
-    cardFace.style.transform = `scale(${scale})`;
-    spins += 1;
-    if (spins >= maxSpins) {
-      clearInterval(spinId);
-      currentPick = finalPick;
-      cardFace.textContent = finalPick;
-      cardFace.style.transform = 'scale(1.06)';
-      setTimeout(() => { cardFace.style.transform = 'scale(1)'; }, 160);
-      onDrawn();
-    }
-  }, 70);
+  // 结果一开始就按权重定好；翻牌只是仪式，不影响概率。
+  currentCard = weightedPick(acts);
+  frontName.textContent = currentCard.name;
+
+  // 翻牌仪式：一次 3D 翻转，翻完再落库/起倒计时。
+  // 复位到牌背 → 强制回流 → 加 .revealed 触发翻转过渡。
+  cardFlip.classList.remove('revealed');
+  void cardFlip.offsetWidth;
+  requestAnimationFrame(() => cardFlip.classList.add('revealed'));
+
+  // 翻转过渡时长 = --dur-slow(420ms)；翻到一半（牌面朝前）后再定稿。
+  setTimeout(onDrawn, 460);
 });
 
-// 抽中定格后：写 pending、存本地、起倒计时
+// 翻牌完成后：写 pending、存本地、起倒计时
 async function onDrawn() {
-  resultLabel.textContent = currentPick;
-  // 抽中瞬间就落一条 pending，即使中途关页面也不会丢这次抽卡的痕迹。
-  const payload = { tier: currentTier.id, activity: currentPick, duration: currentTier.duration };
-  startTimer(currentTier.duration);
-  localStorage.setItem(LS.pick, currentPick);
-  localStorage.setItem(LS.tier, currentTier.id);
+  if (!currentCard) return;
+  const { name, tier, duration } = currentCard;
+  resultLabel.textContent = `${tier} · ${duration} 分钟`;
+  // 落一条 pending，即使中途关页面也不会丢这次抽卡的痕迹。
+  const payload = { tier, activity: name, duration };
+  startTimer(duration);
+  // 倒计时进行中：显示重抽/放弃，隐藏底部换池链接（用 running-actions 里的按钮打断）
+  runningActions.classList.add('show');
+  changeTier.style.display = 'none';
+  localStorage.setItem(LS.card, JSON.stringify(currentCard));
+  localStorage.setItem(LS.pool, currentPool.id);
   try {
     const rec = await logEvent('draw', 'draw_pending', payload);
     currentLogId = rec.id;
@@ -368,6 +512,7 @@ function stopTimer() {
 function onTimerFinished() {
   stopTimer();
   timerEl.textContent = '时间到';
+  runningActions.classList.remove('show');
   feedback.classList.add('show');
 }
 
@@ -378,8 +523,8 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- 反馈：更新 pending 那条记录，而非新插一条 ----------
 async function feedbackDone(status) {
-  const finished = currentPick;
-  const payload = { tier: currentTier?.id, activity: finished, duration: currentTier?.duration };
+  const finished = currentCard;
+  const payload = { tier: finished?.tier, activity: finished?.name, duration: finished?.duration };
   try {
     if (currentLogId) await updateEvent(currentLogId, { type: status, payload });
   } catch (e) {
@@ -387,7 +532,7 @@ async function feedbackDone(status) {
   }
   clearInProgress();
   resetDrawStage();
-  doneNote.textContent = (status === 'draw_done' ? '完成：' : '没做：') + finished
+  doneNote.textContent = (status === 'draw_done' ? '完成：' : '没做：') + (finished?.name || '')
     + (status === 'draw_done' ? `（+${payload.duration} 代币）` : '');
 }
 
@@ -396,7 +541,23 @@ skipBtn.addEventListener('click', () => feedbackDone('draw_skip'));
 
 changeTier.addEventListener('click', (e) => {
   e.preventDefault();
-  // 换档即打断当前这一轮：进行中的 pending 标记为 skip（打断 = 没做）。
+  // 换池即打断当前这一轮：进行中的 pending 标记为 skip（打断 = 没做）。
+  abortPendingAsSkip();
+  clearInProgress();
+  resetDrawStage();
+  showStage('tier');
+});
+
+// 重抽：打断当前轮（记 skip），留在本池立即再翻一张。
+redrawBtn.addEventListener('click', () => {
+  abortPendingAsSkip();
+  clearInProgress();
+  resetDrawStage();
+  drawBtn.click(); // 复用抽卡流程
+});
+
+// 放弃这轮：打断当前轮（记 skip），回到选池界面。
+giveUpBtn.addEventListener('click', () => {
   abortPendingAsSkip();
   clearInProgress();
   resetDrawStage();
@@ -409,7 +570,7 @@ changeTier.addEventListener('click', (e) => {
 function abortPendingAsSkip() {
   if (!currentLogId) return;
   if (feedback.classList.contains('show')) return;
-  const payload = { tier: currentTier?.id, activity: currentPick, duration: currentTier?.duration };
+  const payload = { tier: currentCard?.tier, activity: currentCard?.name, duration: currentCard?.duration };
   const id = currentLogId;
   // 不 await：打断要即时响应 UI，写库在后台完成即可。
   updateEvent(id, { type: 'draw_skip', payload }).catch(err => console.error('打断标记 skip 失败', err));
@@ -418,32 +579,38 @@ function abortPendingAsSkip() {
 // ---------- 进行中一轮的持久化 ----------
 function clearInProgress() {
   stopTimer();
-  localStorage.removeItem(LS.pick);
+  localStorage.removeItem(LS.card);
   localStorage.removeItem(LS.logId);
-  localStorage.removeItem(LS.tier);
+  localStorage.removeItem(LS.pool);
 }
 
 // 页面打开时若有未结束的一轮，恢复到抽卡阶段（含倒计时状态）
 function restoreInProgress() {
   const deadline = Number(localStorage.getItem(LS.deadline));
-  const savedTier = localStorage.getItem(LS.tier);
-  if (!deadline || !savedTier) return;
-  currentTier = tiers.find(t => t.id === savedTier);
-  if (!currentTier) return;
-  currentPick = localStorage.getItem(LS.pick) || null;
+  const savedPool = localStorage.getItem(LS.pool);
+  if (!deadline || !savedPool) return;
+  currentPool = pools.find(p => p.id === savedPool);
+  if (!currentPool) return;
+  try {
+    currentCard = JSON.parse(localStorage.getItem(LS.card) || 'null');
+  } catch { currentCard = null; }
+  if (!currentCard) return;
   currentLogId = localStorage.getItem(LS.logId) || null;
 
-  tierTag.textContent = `${currentTier.label} · ${currentTier.desc}`;
-  cardFace.textContent = currentPick || '?';
-  resultLabel.textContent = currentPick || '';
+  tierTag.textContent = currentPool.isAll ? '全池子 · 混抽' : `${currentPool.label} · ${currentPool.desc}`;
+  applyBackRarity(currentPool.id);
+  frontName.textContent = currentCard.name;
+  resultLabel.textContent = `${currentCard.tier} · ${currentCard.duration} 分钟`;
+  cardFlip.classList.add('revealed'); // 恢复时直接展示已翻开的牌面
   drawBtn.style.display = 'none';
-  changeTier.style.display = 'inline-block';
+  changeTier.style.display = 'none';
   showStage('draw');
 
   if (deadline <= Date.now()) {
     onTimerFinished();
   } else {
     timerEl.style.display = 'block';
+    runningActions.classList.add('show'); // 恢复到倒计时中：显示重抽/放弃
     tick();
     countdownId = setInterval(tick, 1000);
   }

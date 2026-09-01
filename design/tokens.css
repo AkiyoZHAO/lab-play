@@ -32,6 +32,36 @@
   --c-positive:  #4a6b57;  /* 完成 / 正向，复用强调墨绿 */
   --c-negative:  #9c5b52;  /* 跳过 / 负向，低饱和砖红 */
 
+  /* ---------- 稀有度色阶（抽卡牌背 / 卡牌世界观共享） ----------
+     纪律：稀有度不引蓝紫金俗套，全部在“中性墨”里做深浅层级——
+     稀有度越高，牌背底色越深、描边越考究、金属强调线越亮。
+     命名 rar-{档}-{用途}：surface=牌背底、line=描边、ink=纹样/文字、glow=金属强调线。
+     全池子（all）= 中性墨居中档；R=最浅；SR=中深；SSR=最深。 */
+
+  /* 全池子：中性墨，不偏任何一档，作为“混抽”的中立底 */
+  --rar-all-surface: #f0efec;
+  --rar-all-line:    #cfcdc7;
+  --rar-all-ink:     #6b6a66;
+  --rar-all-glow:    #a8a6a0;
+
+  /* R：最浅，近纸白，描边最轻 */
+  --rar-r-surface:   #f6f5f3;
+  --rar-r-line:      #dcdad5;
+  --rar-r-ink:       #8f8d87;
+  --rar-r-glow:      #c3c1ba;
+
+  /* SR：中深墨，描边加重，金属线开始明显 */
+  --rar-sr-surface:  #d9d7d1;
+  --rar-sr-line:     #9c9a93;
+  --rar-sr-ink:      #4a4843;
+  --rar-sr-glow:     #b7b3a6;   /* 微暖的金属灰，非亮金 */
+
+  /* SSR：最深，近墨黑牌背，浅色纹样 + 最考究的金属强调 */
+  --rar-ssr-surface: #2b2a27;
+  --rar-ssr-line:    #4a4843;
+  --rar-ssr-ink:     #d8d5cc;   /* 深底上用浅墨走纹样/文字 */
+  --rar-ssr-glow:    #b9a77f;   /* 克制的暗金，仅一两根强调线用 */
+
   /* ---------- 排版 ---------- */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
