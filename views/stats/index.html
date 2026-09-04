@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>统计 · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* 统计视图骨架。本轮只占位，图表在后续轮次落地。取值来自 design/tokens.css。 */
+  /* 账本视图：把 events 聚合成可感知的证据。数字是主角，图表是注解。
+     配色只用中性阶 + positive/negative（见 DESIGN.md「图表」）。
+     所有取值来自 design/tokens.css，本文件不写死颜色/间距/字号。 */
   .shell {
     max-width: var(--content-max);
     margin: 0 auto;
-    padding: var(--sp-7) var(--sp-5);
+    padding: var(--sp-7) var(--sp-5) var(--sp-8);
   }
   .back {
     font-size: var(--fs-sm);
@@ -23,34 +26,514 @@
     font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
     letter-spacing: var(--ls-tight);
-    margin: var(--sp-6) 0 var(--sp-4);
+    margin: var(--sp-6) 0 var(--sp-5);
   }
-  .placeholder {
+
+  /* 时间范围：胶囊筛选，选中态是本页唯一强调色焦点 */
+  .range {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-7);
+  }
+  .range button {
     background: var(--c-surface);
-    border: 1px solid var(--c-line);
-    border-radius: var(--radius-xl);
-    padding: var(--sp-8) var(--sp-5);
-    text-align: center;
     color: var(--c-text-muted);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-full);
+    padding: var(--sp-1) var(--sp-4);
+    font-size: var(--fs-sm);
+    transition: color var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                background var(--dur-fast) var(--ease-out);
   }
-  .placeholder .icon { font-size: var(--fs-2xl); color: var(--c-accent); }
-  .placeholder p { margin: var(--sp-4) 0 0; font-size: var(--fs-sm); }
+  .range button:hover { color: var(--c-text); border-color: var(--c-line-strong); }
+  .range button.active {
+    color: var(--c-accent);
+    background: var(--c-accent-soft);
+    border-color: var(--c-accent);
+  }
+
+  .status {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    padding: var(--sp-8) 0;
+    text-align: center;
+  }
+  .status.error { color: var(--c-negative); }
+  .hidden { display: none; }
+
+  /* KPI：四个大数字并排，完成数用强调色，其余保持中性 */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-5);
+    margin-bottom: var(--sp-8);
+  }
+  .kpi-value {
+    font-family: var(--font-serif);
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    line-height: var(--lh-tight);
+  }
+  .kpi-value.accent { color: var(--c-accent); }
+  .kpi-label {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--c-text-muted);
+  }
+  .kpi-hint {
+    margin-top: var(--sp-1);
+    font-size: var(--fs-xs);
+    color: var(--c-text-faint);
+  }
+
+  .section { margin-bottom: var(--sp-8); }
+  .section-label {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--c-text-faint);
+    margin-bottom: var(--sp-4);
+  }
+
+  /* 完成占比：一条横条 + 图例 */
+  .ratio {
+    display: flex;
+    height: var(--sp-2);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    background: var(--c-surface-alt);
+  }
+  .ratio span { display: block; height: 100%; }
+  .ratio .done { background: var(--c-positive); }
+  .ratio .skip { background: var(--c-negative); }
+  .ratio .pending { background: var(--c-line-strong); }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-4);
+    margin-top: var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+  }
+  .legend i {
+    display: inline-block;
+    width: var(--sp-2);
+    height: var(--sp-2);
+    border-radius: var(--radius-full);
+    margin-right: var(--sp-1);
+    vertical-align: middle;
+  }
+  .legend .dot-done { background: var(--c-positive); }
+  .legend .dot-skip { background: var(--c-negative); }
+  .legend .dot-pending { background: var(--c-line-strong); }
+
+  /* 每日痕迹：CSS 柱，高度相对区间内最大值 */
+  .chart {
+    display: flex;
+    align-items: stretch;
+    gap: var(--sp-2);
+    height: var(--sp-9);
+  }
+  .chart.tight { gap: var(--sp-1); }
+  .chart-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+  }
+  .chart-stack {
+    width: 70%;
+    max-width: var(--sp-5);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    overflow: hidden;
+    min-height: var(--sp-1);
+    background: var(--c-line);
+  }
+  .chart-stack.has-data {
+    background: transparent;
+    min-height: var(--sp-3); /* 有数据的柱至少可辨，避免 1 次被 17 次比没 */
+  }
+  .chart-seg { width: 100%; }
+  .chart-seg.done { background: var(--c-positive); }
+  .chart-seg.skip { background: var(--c-negative); }
+  .chart-seg.pending { background: var(--c-line-strong); }
+  .chart-label {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--c-text-faint);
+    white-space: nowrap;
+  }
+  .chart-label.ghost { visibility: hidden; }
+
+  /* 活动排行 */
+  .act { margin-bottom: var(--sp-4); }
+  .act-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-2);
+  }
+  .act-name { font-size: var(--fs-sm); }
+  .act-meta { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+  .act-track {
+    height: var(--sp-1);
+    background: var(--c-surface-alt);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .act-fill {
+    height: 100%;
+    background: var(--c-positive);
+    border-radius: var(--radius-full);
+  }
+
+  /* 最近痕迹：流水账本身 */
+  .log { list-style: none; margin: 0; padding: 0; }
+  .log li {
+    display: grid;
+    grid-template-columns: var(--sp-8) var(--sp-7) 1fr auto;
+    gap: var(--sp-3);
+    align-items: baseline;
+    padding: var(--sp-3) 0;
+    border-bottom: 1px solid var(--c-line);
+    font-size: var(--fs-sm);
+  }
+  .log li:last-child { border-bottom: none; }
+  .log-time { color: var(--c-text-faint); font-size: var(--fs-xs); }
+  .log-type { font-size: var(--fs-xs); letter-spacing: var(--ls-wide); }
+  .log-type.done { color: var(--c-positive); }
+  .log-type.skip { color: var(--c-negative); }
+  .log-type.pending { color: var(--c-text-faint); }
+  .log-name { min-width: 0; }
+  .log-meta { color: var(--c-text-faint); font-size: var(--fs-xs); }
+
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); gap: var(--sp-6) var(--sp-4); }
+    .log li { grid-template-columns: var(--sp-8) var(--sp-7) 1fr; }
+    .log-meta { display: none; }
+  }
 </style>
 </head>
 <body>
 <div class="shell">
   <a class="back" href="../../index.html">← 返回主菜单</a>
   <h1>统计</h1>
-  <div class="placeholder">
-    <div class="icon">▤</div>
-    <p>账本视图骨架 · 待实现<br>基于所有 play 产生的 events 计算趋势 / 占比 / 排行</p>
+
+  <div class="range" id="range">
+    <button type="button" data-range="7" class="active">最近 7 天</button>
+    <button type="button" data-range="30">最近 30 天</button>
+    <button type="button" data-range="all">全部</button>
+  </div>
+
+  <div class="status" id="status">读取账本…</div>
+
+  <div id="board" class="hidden">
+    <div class="kpis">
+      <div>
+        <div class="kpi-value accent" id="kpiDone">0</div>
+        <div class="kpi-label">完成</div>
+        <div class="kpi-hint" id="kpiTotal"></div>
+      </div>
+      <div>
+        <div class="kpi-value" id="kpiSkip">0</div>
+        <div class="kpi-label">跳过</div>
+      </div>
+      <div>
+        <div class="kpi-value" id="kpiRate">—</div>
+        <div class="kpi-label">完成率</div>
+        <div class="kpi-hint" id="kpiResolved"></div>
+      </div>
+      <div>
+        <div class="kpi-value" id="kpiTokens">0</div>
+        <div class="kpi-label">时间代币</div>
+        <div class="kpi-hint">完成分钟累计</div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-label">完成占比</div>
+      <div class="ratio" id="ratio"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-label" id="trendLabel">每日痕迹</div>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <section class="section" id="actsSection">
+      <div class="section-label">活动</div>
+      <div id="acts"></div>
+    </section>
+
+    <section class="section" id="logSection">
+      <div class="section-label">最近痕迹</div>
+      <ul class="log" id="log"></ul>
+    </section>
   </div>
 </div>
+
 <script type="module">
-// 待实现：queryEvents({...}) 拉全量事件，在前端聚合出图表。启用时需先引 supabase-js CDN：
-//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-// import { queryEvents } from '../../core/events.js';
+import { queryEvents } from '../../core/events.js';
+
+const TYPE_DONE = 'draw_done';
+const TYPE_SKIP = 'draw_skip';
+const TYPE_PENDING = 'draw_pending';
+const TYPE_LABEL = { [TYPE_DONE]: '完成', [TYPE_SKIP]: '跳过', [TYPE_PENDING]: '进行中' };
+const LOG_CAP = 20;
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const statusEl = document.getElementById('status');
+const boardEl = document.getElementById('board');
+const rangeEl = document.getElementById('range');
+
+let allEvents = [];
+let currentRange = '7';
+
+rangeEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-range]');
+  if (!btn) return;
+  currentRange = btn.dataset.range;
+  for (const b of rangeEl.querySelectorAll('button')) {
+    b.classList.toggle('active', b === btn);
+  }
+  render();
+});
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function md(d) {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function rangeBounds(key, now = new Date()) {
+  if (key === 'all') return { from: null, to: now };
+  const days = key === '30' ? 30 : 7;
+  return { from: startOfDay(addDays(now, -(days - 1))), to: now };
+}
+
+function inRange(ev, from, to) {
+  const t = new Date(ev.created_at).getTime();
+  if (from && t < from.getTime()) return false;
+  if (to && t > to.getTime()) return false;
+  return true;
+}
+
+function kind(type) {
+  if (type === TYPE_DONE) return 'done';
+  if (type === TYPE_SKIP) return 'skip';
+  if (type === TYPE_PENDING) return 'pending';
+  return 'pending';
+}
+
+function trendBuckets(events, from, to) {
+  const end = startOfDay(to);
+  let start = from ? startOfDay(from) : (events.length
+    ? startOfDay(new Date(events[0].created_at))
+    : end);
+  if (start > end) start = end;
+
+  const dayCount = Math.round((end - start) / 86400000) + 1;
+  const weekly = dayCount > 31;
+  const step = weekly ? 7 : 1;
+  const buckets = [];
+
+  for (let cursor = new Date(start); cursor <= end; cursor = addDays(cursor, step)) {
+    const bucketEnd = addDays(cursor, step);
+    const label = weekly
+      ? md(cursor) + '–' + md(addDays(bucketEnd, -1) > end ? end : addDays(bucketEnd, -1))
+      : md(cursor);
+    buckets.push({
+      start: new Date(cursor),
+      end: bucketEnd,
+      label,
+      done: 0, skip: 0, pending: 0,
+    });
+  }
+
+  for (const ev of events) {
+    const t = new Date(ev.created_at);
+    const i = weekly
+      ? Math.min(buckets.length - 1, Math.floor((t - start) / (7 * 86400000)))
+      : Math.min(buckets.length - 1, Math.round((startOfDay(t) - start) / 86400000));
+    if (i < 0) continue;
+    buckets[i][kind(ev.type)]++;
+  }
+  return { buckets, weekly };
+}
+
+function aggregate(events, from, to) {
+  const filtered = events.filter(ev => inRange(ev, from, to));
+  const done = filtered.filter(e => e.type === TYPE_DONE);
+  const skip = filtered.filter(e => e.type === TYPE_SKIP);
+  const pending = filtered.filter(e => e.type === TYPE_PENDING);
+  const resolved = done.length + skip.length;
+  const tokens = done.reduce((s, e) => s + (Number(e.payload?.duration) || 0), 0);
+
+  const acts = new Map();
+  for (const e of filtered) {
+    const name = e.payload?.activity;
+    if (!name) continue;
+    if (!acts.has(name)) acts.set(name, { name, done: 0, skip: 0, pending: 0, tokens: 0 });
+    const row = acts.get(name);
+    if (e.type === TYPE_DONE) {
+      row.done++;
+      row.tokens += Number(e.payload?.duration) || 0;
+    } else if (e.type === TYPE_SKIP) row.skip++;
+    else if (e.type === TYPE_PENDING) row.pending++;
+  }
+  const ranking = [...acts.values()].sort((a, b) =>
+    b.done - a.done ||
+    (b.done + b.skip) - (a.done + a.skip) ||
+    a.name.localeCompare(b.name, 'zh')
+  );
+
+  return { filtered, done, skip, pending, resolved, tokens, ranking };
+}
+
+function render() {
+  if (!allEvents.length) {
+    statusEl.textContent = '这段时间还没有痕迹。';
+    statusEl.classList.remove('error', 'hidden');
+    boardEl.classList.add('hidden');
+    return;
+  }
+
+  const { from, to } = rangeBounds(currentRange);
+  const stats = aggregate(allEvents, from, to);
+
+  if (!stats.filtered.length) {
+    statusEl.textContent = '这段时间还没有痕迹。';
+    statusEl.classList.remove('error', 'hidden');
+    boardEl.classList.add('hidden');
+    return;
+  }
+
+  statusEl.classList.add('hidden');
+  boardEl.classList.remove('hidden');
+
+  document.getElementById('kpiDone').textContent = String(stats.done.length);
+  document.getElementById('kpiSkip').textContent = String(stats.skip.length);
+  document.getElementById('kpiTokens').textContent = String(stats.tokens);
+  document.getElementById('kpiTotal').textContent =
+    `共抽 ${stats.filtered.length} 次` + (stats.pending.length ? ` · ${stats.pending.length} 进行中` : '');
+  document.getElementById('kpiRate').textContent =
+    stats.resolved ? Math.round((stats.done.length / stats.resolved) * 100) + '%' : '—';
+  document.getElementById('kpiResolved').textContent =
+    stats.resolved ? `${stats.resolved} 次已结算` : '还没有结算';
+
+  const total = stats.filtered.length;
+  const ratio = document.getElementById('ratio');
+  ratio.innerHTML =
+    `<span class="done" style="width:${(stats.done.length / total) * 100}%"></span>` +
+    `<span class="skip" style="width:${(stats.skip.length / total) * 100}%"></span>` +
+    `<span class="pending" style="width:${(stats.pending.length / total) * 100}%"></span>`;
+  document.getElementById('legend').innerHTML =
+    `<span><i class="dot-done"></i>完成 ${stats.done.length}</span>` +
+    `<span><i class="dot-skip"></i>跳过 ${stats.skip.length}</span>` +
+    (stats.pending.length ? `<span><i class="dot-pending"></i>进行中 ${stats.pending.length}</span>` : '');
+
+  const { buckets, weekly } = trendBuckets(stats.filtered, from || (stats.filtered[0] ? new Date(stats.filtered[0].created_at) : to), to);
+  document.getElementById('trendLabel').textContent = weekly ? '每周痕迹' : '每日痕迹';
+  const max = Math.max(1, ...buckets.map(b => b.done + b.skip + b.pending));
+  const chart = document.getElementById('chart');
+  chart.classList.toggle('tight', buckets.length > 14);
+  chart.innerHTML = buckets.map((b, i) => {
+    const n = b.done + b.skip + b.pending;
+    const h = n ? (n / max) * 100 : 0;
+    const showLabel = buckets.length <= 10 || i === 0 || i === buckets.length - 1 || i % 5 === 0;
+    const segs =
+      (b.done ? `<div class="chart-seg done" style="height:${(b.done / n) * 100}%"></div>` : '') +
+      (b.pending ? `<div class="chart-seg pending" style="height:${(b.pending / n) * 100}%"></div>` : '') +
+      (b.skip ? `<div class="chart-seg skip" style="height:${(b.skip / n) * 100}%"></div>` : '');
+    return `<div class="chart-col">
+      <div class="chart-stack${n ? ' has-data' : ''}" style="height:${h || 4}%">${n ? segs : ''}</div>
+      <div class="chart-label${showLabel ? '' : ' ghost'}">${b.label}</div>
+    </div>`;
+  }).join('');
+
+  const actsSection = document.getElementById('actsSection');
+  if (!stats.ranking.length) {
+    actsSection.classList.add('hidden');
+  } else {
+    actsSection.classList.remove('hidden');
+    document.getElementById('acts').innerHTML = stats.ranking.map(a => {
+      const settled = a.done + a.skip;
+      const pct = settled ? (a.done / settled) * 100 : 0;
+      const bits = [];
+      if (a.done) bits.push(`${a.done} 完成`);
+      if (a.skip) bits.push(`${a.skip} 跳过`);
+      if (a.pending) bits.push(`${a.pending} 进行中`);
+      if (a.tokens) bits.push(`${a.tokens} 代币`);
+      return `<div class="act">
+        <div class="act-head">
+          <span class="act-name">${esc(a.name)}</span>
+          <span class="act-meta">${bits.join(' · ')}</span>
+        </div>
+        <div class="act-track"><div class="act-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  const recent = [...stats.filtered].reverse().slice(0, LOG_CAP);
+  document.getElementById('log').innerHTML = recent.map(e => {
+    const d = new Date(e.created_at);
+    const time = `${md(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const k = kind(e.type);
+    const activity = e.payload?.activity || '—';
+    const meta = [e.payload?.tier, e.type === TYPE_DONE && e.payload?.duration ? `${e.payload.duration} 代币` : '']
+      .filter(Boolean).join(' · ');
+    return `<li>
+      <span class="log-time">${time}</span>
+      <span class="log-type ${k}">${TYPE_LABEL[e.type] || e.type}</span>
+      <span class="log-name">${esc(activity)}</span>
+      <span class="log-meta">${meta}</span>
+    </li>`;
+  }).join('');
+}
+
+try {
+  allEvents = await queryEvents({ limit: 10000 });
+  render();
+} catch (err) {
+  console.error(err);
+  statusEl.textContent = '读取账本失败。';
+  statusEl.classList.add('error');
+  statusEl.classList.remove('hidden');
+  boardEl.classList.add('hidden');
+}
 </script>
 </body>
 </html>
