@@ -22,11 +22,13 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 
 ## TODO
 
+- [ ] 账号与权限地基:Supabase Auth(magic link,仅我)+ events RLS 改「anon 只读 / 仅我可写」+ 前端登录(抽卡等写操作登录后可用)—— show 给朋友前必做
+- [ ] 分层隐私 + career 细节迁库:敏感细节存 Supabase 私有表(RLS 仅我可读),下钻「登录才看」—— 填敏感内容前做
+- [ ] 挂上 akiyolab.com(CF Pages 接仓库 + 自定义域,替换现落地页)
 - [ ] 统计 → 高密度「总览 Dashboard」(widget 网格)
 - [ ] 事业面板:里程碑写 events / 网页内编辑
 - [ ] 皮肤层:anchor→皮肤绑定 + 兜底
 - [ ] 首页 `self-glance`(如小月历)
-- [ ] career md 迁 Supabase(远)
 - [ ] 图鉴、外部打卡接入(远)
 
 已接:首页(玩法/面板两栏)· 抽卡 · 统计 · 事业面板(概览 + 子线下钻详情)。
