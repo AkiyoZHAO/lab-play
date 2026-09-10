@@ -91,8 +91,8 @@
   <div class="section-label">玩法</div>
   <div class="grid" id="playsGrid"></div>
 
-  <div class="section-label">账本</div>
-  <div class="grid" id="viewsGrid"></div>
+  <div class="section-label">面板</div>
+  <div class="grid" id="panelsGrid"></div>
 </div>
 
 <script type="module">
@@ -125,6 +125,14 @@ const GLYPHS = {
       <path d="M38 40 V12"/>
       <path d="M14 26 l8-10 8 6 8-10" stroke-width="1.1"/>
     </svg>`,
+  // 事业：一条上升后转向的路径 + 箭头，暗示“随时转身”
+  career: `
+    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
+         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 40 V22 a6 6 0 0 1 6-6 h12"/>
+      <path d="M28 10 l7 6 -7 6" stroke-width="1.1"/>
+      <circle cx="12" cy="40" r="1.7" fill="currentColor" stroke="none"/>
+    </svg>`,
 };
 
 // 通用回退纹样：一个带内框的菱形牌形，保证未知 id 也有雅致图形
@@ -136,9 +144,9 @@ const GLYPH_FALLBACK = `
   </svg>`;
 
 async function render() {
-  const data = await fetch('plays.json').then(r => r.json());
+  const data = await fetch('plays.json', { cache: 'no-store' }).then(r => r.json());
   fill('playsGrid', data.plays || []);
-  fill('viewsGrid', data.views || []);
+  fill('panelsGrid', data.panels || []);
 }
 
 function fill(gridId, items) {

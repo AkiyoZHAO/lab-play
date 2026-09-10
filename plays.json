@@ -9,13 +9,21 @@
       "status": "wip"
     }
   ],
-  "views": [
+  "panels": [
     {
       "id": "stats",
       "name": "统计",
       "desc": "所有玩法留下的痕迹汇总——看看这段时间其实做了什么。",
       "icon": "▤",
-      "path": "views/stats/",
+      "path": "panels/stats/",
+      "status": "wip"
+    },
+    {
+      "id": "career",
+      "name": "事业",
+      "desc": "把“随时转身”做成一个有等级、能测量的可维护 skill。",
+      "icon": "◨",
+      "path": "panels/career/",
       "status": "wip"
     }
   ]
