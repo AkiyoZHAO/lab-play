@@ -2,6 +2,8 @@
 
 一个自己拥有的**个人空间**,承载我的人生系统。纯静态、自建、UI 可换,不寄居别人平台。
 
+**→ [akiyozhao.github.io/lab-play](https://akiyozhao.github.io/lab-play/)**
+
 - **玩法 Play** — 一次性行动,写 events(如抽卡)
 - **面板 Panel** — 展示 / 维护状态(如统计、事业)
 - **events 表** — 共享时间线
@@ -27,10 +29,3 @@ lab-play/
 └── ROADMAP.md          蓝图 · 待办 · 决策
 ```
 
-## 跑起来
-
-```bash
-python3 -m http.server 8000
-```
-
-打开 http://localhost:8000 。数据在 Supabase(配置 [`core/config.js`](core/config.js),首次需在 SQL Editor 执行 [`db/schema.sql`](db/schema.sql))。纯静态,push 即上线。
