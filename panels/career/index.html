@@ -6,18 +6,20 @@
 <title>Career · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-  /* 事业面板 v0：只读渲染 career-turnaround.md 的 frontmatter（方案 B）。
-     文案极简——只渲染数据和最短标签，不写说明性注解。
-     状态 5 档用现有墨色阶由浅到深表达（见 DESIGN.md〔六〕），不写死颜色。 */
+  /* 事业面板：概览读 frontmatter（方案 B），点卡片下钻读同一份 md 的正文段。
+     文案极简，状态 5 档用现有墨色阶由浅到深（DESIGN.md〔六〕），不写死颜色。 */
   .shell {
     max-width: var(--content-max);
     margin: 0 auto;
     padding: var(--sp-7) var(--sp-5) var(--sp-8);
   }
   .back {
+    display: inline-block;
     font-size: var(--fs-sm);
     color: var(--c-text-muted);
+    cursor: pointer;
     transition: color var(--dur-fast) var(--ease-out);
   }
   .back:hover { color: var(--c-text); }
@@ -79,12 +81,22 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: var(--sp-4);
   }
+  /* 卡片可点：hover 抬起 + 描边加重，和主菜单入口一致的语言 */
   .card {
     background: var(--c-surface);
     border: 1px solid var(--c-line);
     border-radius: var(--radius-lg);
     padding: var(--sp-5);
     box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: border-color var(--dur-base) var(--ease-out),
+                box-shadow var(--dur-base) var(--ease-out),
+                transform var(--dur-base) var(--ease-out);
+  }
+  .card:hover {
+    border-color: var(--c-line-strong);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
   }
   .card-head {
     display: flex;
@@ -136,6 +148,60 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* ── 下钻详情：把 md 正文段渲染成 HTML，样式全用 token ── */
+  #detail .back { margin-bottom: var(--sp-5); }
+  .prose { font-size: var(--fs-sm); line-height: var(--lh-base); }
+  .prose > :first-child { margin-top: 0; }
+  .prose h1 {
+    font-family: var(--font-serif);
+    font-size: var(--fs-lg);
+    margin: 0 0 var(--sp-5);
+    letter-spacing: var(--ls-tight);
+  }
+  .prose h2 {
+    font-size: var(--fs-base);
+    font-weight: var(--fw-bold);
+    margin: var(--sp-6) 0 var(--sp-3);
+  }
+  .prose h3 {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-muted);
+    margin: var(--sp-5) 0 var(--sp-2);
+  }
+  .prose p { margin: var(--sp-3) 0; }
+  .prose ul, .prose ol { margin: var(--sp-3) 0; padding-left: var(--sp-5); }
+  .prose li { margin: var(--sp-1) 0; }
+  .prose li input[type="checkbox"] { margin-right: var(--sp-2); }
+  .prose blockquote {
+    margin: var(--sp-3) 0;
+    padding: var(--sp-1) var(--sp-4);
+    border-left: 2px solid var(--c-line-strong);
+    color: var(--c-text-muted);
+  }
+  .prose code {
+    background: var(--c-surface-alt);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--sp-1);
+    font-size: 0.9em;
+  }
+  .prose hr { border: none; border-top: 1px solid var(--c-line); margin: var(--sp-6) 0; }
+  /* 表格：横向可滚，描边克制，表头浅底 */
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--sp-4) 0;
+    font-size: var(--fs-xs);
+  }
+  .prose th, .prose td {
+    border: 1px solid var(--c-line);
+    padding: var(--sp-2) var(--sp-3);
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose th { background: var(--c-surface-alt); font-weight: var(--fw-medium); white-space: nowrap; }
+  .prose .table-wrap { overflow-x: auto; }
+
   @media (max-width: 720px) {
     .dash { grid-template-columns: 1fr; gap: var(--sp-6); }
   }
@@ -148,7 +214,7 @@
 
   <div class="status" id="status">Loading…</div>
 
-  <div id="board" class="hidden">
+  <div id="overview" class="hidden">
     <div class="dash">
       <div>
         <div class="dash-label">Level</div>
@@ -172,28 +238,33 @@
 
     <div class="cards" id="cards"></div>
   </div>
+
+  <div id="detail" class="hidden">
+    <a class="back" id="toOverview">↑ Overview</a>
+    <div class="prose" id="detailBody"></div>
+  </div>
 </div>
 
 <script>
-// 中文名 + 序号（顺序即文档顺序，与 frontmatter sections 的 key 一致）
+// 序号 + 展示名（顺序即文档顺序，与 frontmatter sections 的 key 一致）
 const SECTION_META = {
-  market_map:          { idx: 1, zh: 'Market Map' },
-  target_positioning:  { idx: 2, zh: 'Target Positioning' },
-  capability_map:      { idx: 3, zh: 'Capability Map' },
-  evidence_bank:       { idx: 4, zh: 'Evidence Bank' },
-  resume_pack:         { idx: 5, zh: 'Resume Pack' },
-  interview_readiness: { idx: 6, zh: 'Interview Readiness' },
-  opportunity_access:  { idx: 7, zh: 'Opportunity Access' },
-  decision_framework:  { idx: 8, zh: 'Decision Framework' },
-  maintenance:         { idx: 9, zh: 'Maintenance' },
+  market_map:          { idx: 1, name: 'Market Map' },
+  target_positioning:  { idx: 2, name: 'Target Positioning' },
+  capability_map:      { idx: 3, name: 'Capability Map' },
+  evidence_bank:       { idx: 4, name: 'Evidence Bank' },
+  resume_pack:         { idx: 5, name: 'Resume Pack' },
+  interview_readiness: { idx: 6, name: 'Interview Readiness' },
+  opportunity_access:  { idx: 7, name: 'Opportunity Access' },
+  decision_framework:  { idx: 8, name: 'Decision Framework' },
+  maintenance:         { idx: 9, name: 'Maintenance' },
 };
 
 const STATUS_META = {
-  EMPTY:       { zh: 'Empty',      cls: 'st-empty' },
-  MAPPED:      { zh: 'Mapped',     cls: 'st-mapped' },
-  BUILT:       { zh: 'Built',      cls: 'st-built' },
-  TESTED:      { zh: 'Tested',     cls: 'st-tested' },
-  MAINTAINED:  { zh: 'Maintained', cls: 'st-maintained' },
+  EMPTY:       { label: 'Empty',      cls: 'st-empty' },
+  MAPPED:      { label: 'Mapped',     cls: 'st-mapped' },
+  BUILT:       { label: 'Built',      cls: 'st-built' },
+  TESTED:      { label: 'Tested',     cls: 'st-tested' },
+  MAINTAINED:  { label: 'Maintained', cls: 'st-maintained' },
 };
 
 function esc(s) {
@@ -208,8 +279,42 @@ function parseDod(str) {
   return { done: Number(m[1]), total: Number(m[2]) };
 }
 
-const statusEl = document.getElementById('status');
-const boardEl = document.getElementById('board');
+// 把 md 正文（frontmatter 之后）按 `---` 切块，取形如 `# N. Title` 的编号段，按序号存
+function parseBodySections(body) {
+  const byIdx = {};
+  for (const chunk of body.split(/\r?\n---\r?\n/)) {
+    const m = chunk.trim().match(/^#\s+(\d+)\.\s+.+/);
+    if (m) byIdx[Number(m[1])] = chunk.trim();
+  }
+  return byIdx;
+}
+
+const statusEl   = document.getElementById('status');
+const overviewEl = document.getElementById('overview');
+const detailEl   = document.getElementById('detail');
+const detailBody = document.getElementById('detailBody');
+let bodyByIdx = {};
+
+function showDetail(key) {
+  const idx = SECTION_META[key]?.idx;
+  const md = bodyByIdx[idx];
+  if (!md) return;
+  // 表格套一层 .table-wrap 以便窄屏横向滚动
+  detailBody.innerHTML = marked.parse(md)
+    .replace(/<table>/g, '<div class="table-wrap"><table>')
+    .replace(/<\/table>/g, '</table></div>');
+  overviewEl.classList.add('hidden');
+  detailEl.classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+function showOverview() {
+  detailEl.classList.add('hidden');
+  overviewEl.classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+document.getElementById('toOverview').addEventListener('click', showOverview);
 
 function render(fm) {
   const lv = Math.max(0, Math.min(5, Number(fm.readiness_level) || 0));
@@ -235,16 +340,17 @@ function render(fm) {
     nextEl.classList.add('empty');
   }
 
-  const entries = Object.entries(fm.sections || {});
-  document.getElementById('cards').innerHTML = entries.map(([key, s]) => {
-    const meta = SECTION_META[key] || { idx: '', zh: key };
+  const cardsEl = document.getElementById('cards');
+  cardsEl.innerHTML = Object.entries(fm.sections || {}).map(([key, s]) => {
+    const meta = SECTION_META[key] || { idx: '', name: key };
     const st = STATUS_META[s.status] || STATUS_META.EMPTY;
     const { done, total } = parseDod(s.dod);
     const pct = total ? (done / total) * 100 : 0;
-    return `<div class="card">
+    const clickable = bodyByIdx[meta.idx] ? ' data-key="' + key + '"' : '';
+    return `<div class="card"${clickable}>
       <div class="card-head">
-        <span><span class="card-idx">${meta.idx}</span><span class="card-name">${esc(meta.zh)}</span></span>
-        <span class="badge ${st.cls}">${st.zh}</span>
+        <span><span class="card-idx">${meta.idx}</span><span class="card-name">${esc(meta.name)}</span></span>
+        <span class="badge ${st.cls}">${st.label}</span>
       </div>
       <div class="dod">
         <div class="dod-track"><div class="dod-fill" style="width:${pct}%"></div></div>
@@ -253,8 +359,13 @@ function render(fm) {
     </div>`;
   }).join('');
 
+  cardsEl.addEventListener('click', (e) => {
+    const card = e.target.closest('.card[data-key]');
+    if (card) showDetail(card.dataset.key);
+  });
+
   statusEl.classList.add('hidden');
-  boardEl.classList.remove('hidden');
+  overviewEl.classList.remove('hidden');
 }
 
 (async () => {
@@ -263,7 +374,8 @@ function render(fm) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (!m) throw new Error('没找到 frontmatter');
+    if (!m) throw new Error('no frontmatter');
+    bodyByIdx = parseBodySections(text.slice(m[0].length));
     render(jsyaml.load(m[1]));
   } catch (err) {
     console.error(err);
