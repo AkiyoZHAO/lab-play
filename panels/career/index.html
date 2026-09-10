@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事业 · lab-play</title>
+<link rel="stylesheet" href="../../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+<style>
+  /* 事业面板 v0：只读渲染 career-turnaround.md 的 frontmatter（方案 B）。
+     文案极简——只渲染数据和最短标签，不写说明性注解。
+     状态 5 档用现有墨色阶由浅到深表达（见 DESIGN.md〔六〕），不写死颜色。 */
+  .shell {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--sp-7) var(--sp-5) var(--sp-8);
+  }
+  .back {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .back:hover { color: var(--c-text); }
+  h1 {
+    font-family: var(--font-serif);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    margin: var(--sp-6) 0 var(--sp-7);
+  }
+
+  .status {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    padding: var(--sp-8) 0;
+    text-align: center;
+  }
+  .status.error { color: var(--c-negative); }
+  .hidden { display: none; }
+
+  /* 仪表盘：等级 / RTO / 通关 */
+  .dash {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-5);
+    padding-bottom: var(--sp-6);
+    margin-bottom: var(--sp-6);
+    border-bottom: 1px solid var(--c-line);
+  }
+  .dash-label {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--c-text-faint);
+    margin-bottom: var(--sp-3);
+  }
+  .dash-value {
+    font-family: var(--font-serif);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    line-height: var(--lh-tight);
+  }
+  .pips { display: flex; gap: var(--sp-1); margin-top: var(--sp-3); }
+  .pip {
+    flex: 1;
+    height: var(--sp-2);
+    border-radius: var(--radius-full);
+    background: var(--c-line);
+  }
+  .pip.on { background: var(--c-accent); }
+
+  .next { margin-bottom: var(--sp-7); }
+  .next .dash-label { margin-bottom: var(--sp-2); }
+  .next-text { font-size: var(--fs-sm); }
+  .next-text.empty { color: var(--c-text-faint); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--sp-4);
+  }
+  .card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    box-shadow: var(--shadow-sm);
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+  }
+  .card-idx {
+    font-family: var(--font-serif);
+    font-size: var(--fs-xs);
+    color: var(--c-text-faint);
+    margin-right: var(--sp-1);
+  }
+  .card-name {
+    font-size: var(--fs-base);
+    font-weight: var(--fw-medium);
+    letter-spacing: var(--ls-tight);
+  }
+
+  /* 状态 badge：5 档墨色由浅到深，全部取自现有 token */
+  .badge {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    padding: 2px var(--sp-3);
+    border-radius: var(--radius-full);
+    border: 1px solid var(--c-line);
+    white-space: nowrap;
+  }
+  .badge.st-empty       { background: var(--c-surface-alt);   color: var(--c-text-faint); border-color: var(--c-line); }
+  .badge.st-mapped      { background: var(--rar-r-surface);   color: var(--rar-r-ink);    border-color: var(--rar-r-line); }
+  .badge.st-built       { background: var(--rar-all-surface); color: var(--rar-all-ink);  border-color: var(--rar-all-line); }
+  .badge.st-tested      { background: var(--rar-sr-surface);  color: var(--rar-sr-ink);   border-color: var(--rar-sr-line); }
+  .badge.st-maintained  { background: var(--rar-ssr-surface); color: var(--rar-ssr-ink);  border-color: var(--rar-ssr-line); }
+
+  .dod { display: flex; align-items: center; gap: var(--sp-3); }
+  .dod-track {
+    flex: 1;
+    height: var(--sp-1);
+    background: var(--c-surface-alt);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .dod-fill { height: 100%; background: var(--c-accent); border-radius: var(--radius-full); }
+  .dod-num {
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 720px) {
+    .dash { grid-template-columns: 1fr; gap: var(--sp-6); }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <a class="back" href="../../index.html">← 返回</a>
+  <h1>事业</h1>
+
+  <div class="status" id="status">读取中…</div>
+
+  <div id="board" class="hidden">
+    <div class="dash">
+      <div>
+        <div class="dash-label">等级</div>
+        <div class="dash-value" id="lvValue">—</div>
+        <div class="pips" id="pips"></div>
+      </div>
+      <div>
+        <div class="dash-label">RTO</div>
+        <div class="dash-value" id="rtoValue">—</div>
+      </div>
+      <div>
+        <div class="dash-label">通关</div>
+        <div class="dash-value" id="actValue">—</div>
+      </div>
+    </div>
+
+    <div class="next">
+      <div class="dash-label">下一步</div>
+      <div class="next-text" id="nextText"></div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+  </div>
+</div>
+
+<script>
+// 中文名 + 序号（顺序即文档顺序，与 frontmatter sections 的 key 一致）
+const SECTION_META = {
+  market_map:          { idx: 1, zh: '市场地图' },
+  target_positioning:  { idx: 2, zh: '目标定位' },
+  capability_map:      { idx: 3, zh: '能力图谱' },
+  evidence_bank:       { idx: 4, zh: '证据库' },
+  resume_pack:         { idx: 5, zh: '简历包' },
+  interview_readiness: { idx: 6, zh: '面试就绪' },
+  opportunity_access:  { idx: 7, zh: '机会触达' },
+  decision_framework:  { idx: 8, zh: '决策框架' },
+  maintenance:         { idx: 9, zh: '维护' },
+};
+
+const STATUS_META = {
+  EMPTY:       { zh: '空',     cls: 'st-empty' },
+  MAPPED:      { zh: '已识别', cls: 'st-mapped' },
+  BUILT:       { zh: '已搭建', cls: 'st-built' },
+  TESTED:      { zh: '已验证', cls: 'st-tested' },
+  MAINTAINED:  { zh: '可维护', cls: 'st-maintained' },
+};
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function parseDod(str) {
+  const m = String(str || '').match(/(\d+)\s*\/\s*(\d+)/);
+  if (!m) return { done: 0, total: 0 };
+  return { done: Number(m[1]), total: Number(m[2]) };
+}
+
+const statusEl = document.getElementById('status');
+const boardEl = document.getElementById('board');
+
+function render(fm) {
+  const lv = Math.max(0, Math.min(5, Number(fm.readiness_level) || 0));
+  document.getElementById('lvValue').textContent = `Lv.${lv} / 5`;
+  document.getElementById('pips').innerHTML =
+    Array.from({ length: 5 }, (_, i) =>
+      `<span class="pip${i < lv ? ' on' : ''}"></span>`).join('');
+
+  const rto = fm.career_rto;
+  document.getElementById('rtoValue').textContent =
+    (rto == null || rto === 'unknown' || rto === '') ? '未知' : String(rto);
+
+  const actVals = Object.values(fm.activation || {});
+  document.getElementById('actValue').textContent =
+    `${actVals.filter(Boolean).length} / ${actVals.length}`;
+
+  const nextEl = document.getElementById('nextText');
+  if (fm.next_action) {
+    nextEl.textContent = fm.next_action;
+    nextEl.classList.remove('empty');
+  } else {
+    nextEl.textContent = '—';
+    nextEl.classList.add('empty');
+  }
+
+  const entries = Object.entries(fm.sections || {});
+  document.getElementById('cards').innerHTML = entries.map(([key, s]) => {
+    const meta = SECTION_META[key] || { idx: '', zh: key };
+    const st = STATUS_META[s.status] || STATUS_META.EMPTY;
+    const { done, total } = parseDod(s.dod);
+    const pct = total ? (done / total) * 100 : 0;
+    return `<div class="card">
+      <div class="card-head">
+        <span><span class="card-idx">${meta.idx}</span><span class="card-name">${esc(meta.zh)}</span></span>
+        <span class="badge ${st.cls}">${st.zh}</span>
+      </div>
+      <div class="dod">
+        <div class="dod-track"><div class="dod-fill" style="width:${pct}%"></div></div>
+        <span class="dod-num">${done}/${total}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  statusEl.classList.add('hidden');
+  boardEl.classList.remove('hidden');
+}
+
+(async () => {
+  try {
+    const res = await fetch('./career-turnaround.md', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!m) throw new Error('没找到 frontmatter');
+    render(jsyaml.load(m[1]));
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = '读取失败（需通过静态服务器打开）。';
+    statusEl.classList.add('error');
+  }
+})();
+</script>
+</body>
+</html>
