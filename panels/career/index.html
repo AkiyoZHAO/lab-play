@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>事业 · lab-play</title>
+<title>Career · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
 <style>
@@ -143,15 +143,15 @@
 </head>
 <body>
 <div class="shell">
-  <a class="back" href="../../index.html">← 返回</a>
-  <h1>事业</h1>
+  <a class="back" href="../../index.html">← Back</a>
+  <h1>Career</h1>
 
-  <div class="status" id="status">读取中…</div>
+  <div class="status" id="status">Loading…</div>
 
   <div id="board" class="hidden">
     <div class="dash">
       <div>
-        <div class="dash-label">等级</div>
+        <div class="dash-label">Level</div>
         <div class="dash-value" id="lvValue">—</div>
         <div class="pips" id="pips"></div>
       </div>
@@ -160,13 +160,13 @@
         <div class="dash-value" id="rtoValue">—</div>
       </div>
       <div>
-        <div class="dash-label">通关</div>
+        <div class="dash-label">Unlock</div>
         <div class="dash-value" id="actValue">—</div>
       </div>
     </div>
 
     <div class="next">
-      <div class="dash-label">下一步</div>
+      <div class="dash-label">Next</div>
       <div class="next-text" id="nextText"></div>
     </div>
 
@@ -177,23 +177,23 @@
 <script>
 // 中文名 + 序号（顺序即文档顺序，与 frontmatter sections 的 key 一致）
 const SECTION_META = {
-  market_map:          { idx: 1, zh: '市场地图' },
-  target_positioning:  { idx: 2, zh: '目标定位' },
-  capability_map:      { idx: 3, zh: '能力图谱' },
-  evidence_bank:       { idx: 4, zh: '证据库' },
-  resume_pack:         { idx: 5, zh: '简历包' },
-  interview_readiness: { idx: 6, zh: '面试就绪' },
-  opportunity_access:  { idx: 7, zh: '机会触达' },
-  decision_framework:  { idx: 8, zh: '决策框架' },
-  maintenance:         { idx: 9, zh: '维护' },
+  market_map:          { idx: 1, zh: 'Market Map' },
+  target_positioning:  { idx: 2, zh: 'Target Positioning' },
+  capability_map:      { idx: 3, zh: 'Capability Map' },
+  evidence_bank:       { idx: 4, zh: 'Evidence Bank' },
+  resume_pack:         { idx: 5, zh: 'Resume Pack' },
+  interview_readiness: { idx: 6, zh: 'Interview Readiness' },
+  opportunity_access:  { idx: 7, zh: 'Opportunity Access' },
+  decision_framework:  { idx: 8, zh: 'Decision Framework' },
+  maintenance:         { idx: 9, zh: 'Maintenance' },
 };
 
 const STATUS_META = {
-  EMPTY:       { zh: '空',     cls: 'st-empty' },
-  MAPPED:      { zh: '已识别', cls: 'st-mapped' },
-  BUILT:       { zh: '已搭建', cls: 'st-built' },
-  TESTED:      { zh: '已验证', cls: 'st-tested' },
-  MAINTAINED:  { zh: '可维护', cls: 'st-maintained' },
+  EMPTY:       { zh: 'Empty',      cls: 'st-empty' },
+  MAPPED:      { zh: 'Mapped',     cls: 'st-mapped' },
+  BUILT:       { zh: 'Built',      cls: 'st-built' },
+  TESTED:      { zh: 'Tested',     cls: 'st-tested' },
+  MAINTAINED:  { zh: 'Maintained', cls: 'st-maintained' },
 };
 
 function esc(s) {
@@ -220,7 +220,7 @@ function render(fm) {
 
   const rto = fm.career_rto;
   document.getElementById('rtoValue').textContent =
-    (rto == null || rto === 'unknown' || rto === '') ? '未知' : String(rto);
+    (rto == null || rto === 'unknown' || rto === '') ? 'Unknown' : String(rto);
 
   const actVals = Object.values(fm.activation || {});
   document.getElementById('actValue').textContent =
@@ -267,7 +267,7 @@ function render(fm) {
     render(jsyaml.load(m[1]));
   } catch (err) {
     console.error(err);
-    statusEl.textContent = '读取失败（需通过静态服务器打开）。';
+    statusEl.textContent = 'Failed to load (open via a static server).';
     statusEl.classList.add('error');
   }
 })();
