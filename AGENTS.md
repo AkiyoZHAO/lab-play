@@ -1,20 +1,22 @@
 # AGENTS.md — 给 coding agent 的工作规则
 
-本文件是在这个 repo 里工作的硬性约束。动手前先读它，以及 [`lab-play-system-design.md`](lab-play-system-design.md)（设计哲学）和 [`design/DESIGN.md`](design/DESIGN.md)（视觉规范）。
+本文件是在这个 repo 里工作的硬性约束。动手前先读它，以及 [`ROADMAP.md`](ROADMAP.md)（定位 · 蓝图 · 决策）和 [`design/DESIGN.md`](design/DESIGN.md)（视觉规范）。
 
 ---
 
 ## 一、这是什么
 
-lab-play 是一个**个人游戏系统**网站——不是工具箱，是一个有整体感、重体验的游戏系统。抽卡是第一个玩法（play），之后会不断加新玩法。价值在**玩法创意与 UI 体验**，不在功能复杂度。
+lab-play 是一个自己拥有的**个人空间**，承载人生系统。内容分两类：**玩法**（flow 型，写 events，如抽卡）/ **面板**（state 型，自持状态，如统计、事业）。价值在内容与 UI 体验，不在功能复杂度。
+
+定位、分层 + anchor 契约、TODO 见 [`ROADMAP.md`](ROADMAP.md)。
 
 ---
 
-## 二、不可违背的原则（来自项目书）
+## 二、不可违背的原则
 
 1. **单向流水账**：events 只记录「发生了什么」。**不做**双向货币（赚币-花币-兑换定价），**不做**手动定价的消费出口——这是最容易半途而废的环节。
 2. **记账动作要最轻**：先把原始事件存下来，规则（分档定价、成就阈值）后置、可随时调整，不影响底层数据。
-3. **events 是唯一真相源**：统计 / 图鉴 / 回顾都是对 events 表的读视图，**不单独存状态、不新增业务表**。图鉴 = 基于规则扫描事件表，而非另存一份成就状态。
+3. **events 是共享时间线**（不再是「唯一状态存储」）：玩法的行动、面板的里程碑都写进这条线；回顾 / 统计 / Dashboard 对它做读视图。但**面板的当前状态由面板自己持有**（如事业面板先用 Markdown 文档态），不要求一切都能从 events 重建。玩法侧不自存历史，历史交给 events。
 4. **极简、低摩擦**：不因为「更完整」就引入违背极简的复杂度（例如手动搬运外部打卡数据）。
 
 ---
@@ -32,30 +34,41 @@ lab-play 是一个**个人游戏系统**网站——不是工具箱，是一个�
 
 ---
 
-## 四、如何新增一个 play（标准流程）
+## 四、如何新增玩法 / 面板（标准流程）
+
+新增任何内容 = 多一个 anchor（`play:<id>` 或 `panel:<id>`），首页据清单自动列出，**不用改首页代码**；UI 需为未显式摆位的 anchor 提供默认兜底（见项目书〔五〕）。
+
+**新增玩法（flow 型，写 events）：**
 
 1. 在 `plays/<name>/` 建目录，放 `index.html`（页面）和 `README.md`（玩法意图 + 写哪些 event）。
 2. 页面里：
    - `<link rel="stylesheet" href="../../design/tokens.css">` 引入设计 token；
-   - 若要读写事件，先引 supabase-js CDN，再 import events.js：
+   - 若要写事件，先引 supabase-js CDN，再 import events.js：
      ```html
      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
      <script type="module">
        import { logEvent, updateEvent, queryEvents } from '../../core/events.js';
      </script>
      ```
-3. 在 `plays.json` 的 `plays` 数组加一条（`id / name / desc / icon / path / status`）。
-4. 完成——主菜单 `index.html` 会自动列出这个入口，**不用改首页代码**。
+3. 在 `plays.json` 加一条清单（`id / name / desc / icon / path / status`）。
 
-> 账本视图（不产生新数据、只汇总的页面，如统计）放 `views/<name>/`，流程同上，加进 `plays.json` 的 `views` 数组。
+**新增面板（state 型，展示 / 维护状态）：**
+
+1. 在 `panels/<name>/` 建目录，放 `index.html`（+ 可选 `README.md`）。可参考已有的 `panels/stats/`、`panels/career/`。
+2. 数据来源二选一：
+   - **自持状态型**（如事业）：状态存面板自己的文件（先 Markdown 文档态），页面做只读渲染 + 进度可视化；**里程碑**通过 events.js emit 一条事件。
+   - **聚合型**（如总览 Dashboard、统计）：`queryEvents` 读 events 聚合，只读、不自存状态。
+3. 在 `plays.json` 加一条清单。
+
+> 「账本视图」已并入「面板」：统计在 `panels/stats/`、事业在 `panels/career/`；`plays.json` 用 `plays[]` + `panels[]` 两个数组。`panels/stats/` 升级为高密度「总览 Dashboard」仍是待办。
 
 ---
 
 ## 五、数据写入约定
 
-- **一律通过 [`core/events.js`](core/events.js) 读写**，禁止在 play 里自己建 Supabase client 或直接查 events 表。这样「唯一写入口」的语义才成立。
-- 事件格式：`play`（哪个玩法）/ `type`（事件类型）/ `payload`（该玩法自定义的 JSON）。新玩法**不改表结构**，自定义内容全塞进 `payload`。
-- 数据层是**纯静态 + Supabase**，前端直连 events 表（靠 RLS 兜底），表结构与策略见 [`db/schema.sql`](db/schema.sql)。但 play 代码**只认 `core/events.js`**，不直接建 Supabase client。
+- **一律通过 [`core/events.js`](core/events.js) 读写**，禁止在玩法 / 面板里自己建 Supabase client 或直接查 events 表。这样「唯一写入口」的语义才成立。
+- 事件格式：`play`（来源：哪个玩法 / 面板，如 `draw` / `career`）/ `type`（事件类型）/ `payload`（该来源自定义的 JSON）。新内容**不改表结构**，自定义部分全塞进 `payload`。
+- 数据层是**纯静态 + Supabase**，前端直连 events 表（靠 RLS 兜底），表结构与策略见 [`db/schema.sql`](db/schema.sql)。但玩法 / 面板代码**只认 `core/events.js`**，不直接建 Supabase client。
 
 ---
 
