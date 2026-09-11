@@ -14,6 +14,8 @@
 - Career 面板 readiness / RTO / 下一步摘要
 - 最近时间线同时展示玩法事件和 Career milestone；玩法 KPI 只统计 draw，不把面板事件误算为 pending
 - 时间代币只来自 `draw_done.payload.duration`；面板 milestone 不参与代币计算
+- Owner 登录后显示全部未结算 `draw_pending`，可补记 Done / Skip
+- 事件来源与时间线格式注册在 [`sources.js`](sources.js)，新增来源不改 Dashboard 主渲染逻辑
 - 完成率分母是已结算（完成 + 跳过）；进行中的 pending 单独计数，不计入完成率
 
 ## 与 events 的关系

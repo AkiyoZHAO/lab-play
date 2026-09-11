@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Career · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.2/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
 <style>
   .shell {
     max-width: var(--content-max);
@@ -310,8 +310,7 @@
 
 <script type="module">
 import { getSession, isOwner, onAuthChange } from '../../core/auth.js';
-import { logEvent } from '../../core/events.js';
-import { queryPanelPrivate, queryPanelState, savePanelPrivate, savePanelState } from '../../core/panels.js';
+import { queryPanelPrivate, queryPanelState, saveCareerPanel, savePanelPrivate } from '../../core/panels.js';
 
 const PANEL = 'career';
 const STATUS_ORDER = ['EMPTY', 'MAPPED', 'BUILT', 'TESTED', 'MAINTAINED'];
@@ -574,22 +573,20 @@ document.getElementById('stateForm').addEventListener('submit', async event => {
   button.disabled = true;
   note.textContent = 'Saving…';
   try {
-    const savedPrivate = await savePanelPrivate(PANEL, {
+    const content = {
       schema_version: 1,
       meta: formData.privateMeta,
       sections: privateSections,
-    });
-    privateMeta = structuredClone(savedPrivate.content.meta || {});
-    privateSections = structuredClone(savedPrivate.content.sections || {});
-    privateLoaded = true;
-    const saved = await savePanelState(PANEL, after);
+    };
+    const milestones = milestonePayloads(before, after);
+    const saved = await saveCareerPanel(after, content, milestones);
     currentState = publicState(saved.state);
-    const milestones = milestonePayloads(before, currentState);
-    const results = await Promise.allSettled(milestones.map(payload => logEvent(PANEL, 'career_milestone', payload)));
-    const failed = results.filter(result => result.status === 'rejected').length;
-    const message = failed ? `状态已保存，${failed} 条里程碑写入失败。` : `已保存${milestones.length ? ` · ${milestones.length} 条里程碑` : ''}`;
+    privateMeta = structuredClone(saved.content?.meta || {});
+    privateSections = structuredClone(saved.content?.sections || {});
+    privateLoaded = true;
+    const message = `已保存${saved.milestones ? ` · ${saved.milestones} 条里程碑` : ''}`;
     renderOverview();
-    flash(message, failed > 0);
+    flash(message);
   } catch (error) {
     note.textContent = error.message || '保存失败。';
   } finally {

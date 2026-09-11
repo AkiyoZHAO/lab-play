@@ -46,6 +46,23 @@ if (insertProbe.body?.code === '23502') {
   failures.push(`anon INSERT probe returned an unexpected result: ${insertProbe.body?.code || insertProbe.response.status}`);
 }
 
+for (const [name, body] of [
+  ['save_career_panel', { p_state: {}, p_private: {}, p_milestones: [] }],
+  ['restore_lab_play_backup', { p_backup: { format: 'invalid', version: 0 } }],
+]) {
+  const result = await jsonResponse(`/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (result.response.status === 404 || result.body?.code === 'PGRST202') {
+    failures.push(`${name} RPC has not been deployed`);
+  } else if (result.response.ok) {
+    failures.push(`${name} unexpectedly allowed anonymous execution`);
+  } else if (!['42501', 'PGRST301'].includes(result.body?.code)) {
+    failures.push(`${name} anonymous gate returned an unexpected result: ${result.body?.code || result.response.status}`);
+  }
+}
+
 if (failures.length) {
   console.error(failures.map(item => `- ${item}`).join('\n'));
   process.exit(1);

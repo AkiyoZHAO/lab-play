@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Collection · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <style>
   .shell {
     max-width: var(--content-max);
@@ -209,7 +209,7 @@ function evaluate(achievement, events) {
 async function load() {
   const [catalog, events] = await Promise.all([
     fetch('./achievements.json', { cache: 'no-store' }).then(response => response.json()),
-    queryEvents({ play: 'draw', limit: 10000 }),
+    queryEvents({ play: 'draw' }),
   ]);
   const achievements = catalog.achievements || [];
   let unlocked = 0;

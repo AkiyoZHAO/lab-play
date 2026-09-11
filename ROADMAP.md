@@ -25,16 +25,10 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 ### 下一步
 
 - [ ] **图鉴建设**:当前只有规则引擎 +「弹钢琴 5h → 李斯特」样例;确定首批“行为 / 累计阈值 / 人物或称号 / 视觉纹样”,形成真正可逛的图鉴。只由原始 events 推导,不新增图鉴进度表,不与 coins 绑定。
-- [ ] **events 完整读取**:Dashboard / Collection 当前最多读取按时间升序的前 10000 条;改为 cursor 分页或完整聚合,避免长期使用后静默漏掉新事件。
-- [ ] **抽卡 pending 对账**:处理跨设备、localStorage 丢失或打断写入失败留下的长期 `draw_pending`;提供 Owner 可见的待结算列表与 Done / Skip 修正入口。
-- [ ] **个人数据备份**:提供 Owner-only 导出,覆盖 events、`panel_states`、`panel_private`;格式保持原始 JSON,并写清恢复步骤,保证个人空间可迁移。
 
 ### 后续
 
-- [ ] **Career 写入一致性**:当前一次保存跨 `panel_private`、`panel_states`、milestone events;增加事务 RPC 或可靠重试,避免部分成功后状态与时间线不一致。
-- [ ] **Dashboard 扩展契约**:把现有硬编码的 Draw KPI / Career widget 抽成轻量 source→widget/formatter 注册,新增玩法或面板时不改 Dashboard 主逻辑。
-- [ ] **生产依赖与安全头**:固定或本地托管 supabase-js / js-yaml / marked 版本;补静态安全响应头,降低 CDN 漂移与页面被嵌入风险。
-- [ ] **发布与回归自动化**:main push 后自动执行 `scripts/check.mjs`、远端门禁与关键页面 smoke,通过后部署 Cloudflare Worker,避免源码与正式站漂移。
+- [ ] **发布自动化启用**:GitHub Actions 已接本地检查、Supabase 门禁、Wrangler deploy 与线上 smoke;还需在仓库 Actions secrets 配置 `CLOUDFLARE_API_TOKEN`,配置前 push 只做验证、不自动发布。
 
 ### 已完成
 
@@ -46,6 +40,13 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 - [x] 皮肤层:anchor→皮肤绑定 + 兜底
 - [x] 首页 `self-glance`(周视图)
 - [x] 图鉴基础:events 累计分钟的阈值判定、进度展示与首次点亮日期
+- [x] events 完整读取:id cursor 分页,不受 PostgREST 单次返回上限影响
+- [x] 个人数据备份:Owner-only JSON 导出 + 事务恢复
+- [x] Career 写入一致性:公开状态、私有正文与 milestone events 通过单个 RPC 原子提交
+- [x] 抽卡 pending 对账:Dashboard Owner widget 展示全部未结算记录,支持 Done / Skip 修正
+- [x] Dashboard 扩展契约:事件 source→summary/formatter 注册从主页面拆出
+- [x] 生产依赖与安全头:CDN 使用精确版本;Cloudflare 静态响应加入 CSP、防嵌入与 MIME 等安全头
+- [x] 发布与回归工作流:main push 自动检查;部署与线上 smoke 步骤已就绪并在有 Cloudflare secret 时自动启用
 
 已接:首页(玩法/面板两栏 + self-glance + 默认皮肤)· 抽卡 · Dashboard · 事业面板(概览 + 私有下钻/编辑)· 图鉴基础。
 
@@ -61,3 +62,4 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 - **2026-09-11** Owner 登录从 magic link 改为邮箱 + 密码,避免 Supabase 内置邮件限流;登录后可在站内修改密码。
 - **2026-09-11** 图鉴从「抽到即收集」修正为累计行为成就:只统计 `draw_done` 的实际分钟,达到配置阈值后点亮人物/称号。
 - **2026-09-11** 网站审计后把图鉴内容建设重新列为 TODO;近期优先保证事件完整读取、pending 对账与个人数据可迁移,后续再做写入一致性、Dashboard 扩展和发布稳固。
+- **2026-09-11** events 改为 id cursor 分页;加入 Owner 数据导出/事务恢复;Career 多表 + milestone 保存合并为原子 RPC。

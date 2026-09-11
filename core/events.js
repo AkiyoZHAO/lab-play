@@ -52,19 +52,35 @@ export async function updateEvent(id, patch) {
 
 /**
  * 查询 events。统计 / 图鉴 / 回顾都基于它在前端计算。
- * @param {{play?:string, type?:string, from?:string, to?:string, limit?:number}} filters
- * @returns {Promise<Array<object>>} 按 created_at 升序的事件数组
+ * 使用 id cursor 分页绕过 PostgREST 单次返回上限；limit 只作为调用方显式总上限。
+ * @param {{play?:string, type?:string, from?:string, to?:string, limit?:number, pageSize?:number}} filters
+ * @returns {Promise<Array<object>>} 按 id（即写入时间）升序的事件数组
  */
 export async function queryEvents(filters = {}) {
-  let query = db.from('events')
-    .select('id, created_at, play, type, payload')
-    .order('created_at', { ascending: true });
-  if (filters.play) query = query.eq('play', filters.play);
-  if (filters.type) query = query.eq('type', filters.type);
-  if (filters.from) query = query.gte('created_at', filters.from);
-  if (filters.to) query = query.lte('created_at', filters.to);
-  if (filters.limit) query = query.limit(filters.limit);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  const pageSize = Math.max(1, Math.min(1000, Number(filters.pageSize) || 1000));
+  const totalLimit = filters.limit ? Math.max(1, Number(filters.limit)) : Infinity;
+  const events = [];
+  let afterId = 0;
+
+  while (events.length < totalLimit) {
+    const size = Math.min(pageSize, totalLimit - events.length);
+    let query = db.from('events')
+      .select('id, created_at, play, type, payload')
+      .gt('id', afterId)
+      .order('id', { ascending: true })
+      .limit(size);
+    if (filters.play) query = query.eq('play', filters.play);
+    if (filters.type) query = query.eq('type', filters.type);
+    if (filters.from) query = query.gte('created_at', filters.from);
+    if (filters.to) query = query.lte('created_at', filters.to);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = data || [];
+    if (page.length === 0) break;
+    events.push(...page);
+    afterId = page[page.length - 1].id;
+  }
+
+  return events;
 }

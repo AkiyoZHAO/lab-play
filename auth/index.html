@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Owner · lab-play</title>
 <link rel="stylesheet" href="../design/tokens.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <style>
   .shell {
     max-width: var(--content-narrow);
@@ -111,9 +111,12 @@
       <p class="hint">已登录为 <span id="account"></span></p>
       <div class="actions">
         <a class="continue" id="continueLink" href="../">Continue</a>
+        <button class="secondary" id="exportBtn" type="button">Export data</button>
+        <button class="secondary" id="importBtn" type="button">Restore data</button>
         <button class="secondary" id="changePasswordBtn" type="button">Change password</button>
         <button class="secondary" id="signOutBtn" type="button">Sign out</button>
       </div>
+      <input class="hidden" id="importFile" type="file" accept="application/json,.json">
     </div>
 
     <form class="form hidden" id="passwordForm">
@@ -133,6 +136,7 @@
 
 <script type="module">
 import { getSession, isOwner, onAuthChange, signInWithPassword, signOut, updatePassword } from '../core/auth.js';
+import { createBackup, downloadBackup, restoreBackup } from '../core/backup.js';
 
 const signedOut = document.getElementById('signedOut');
 const signedIn = document.getElementById('signedIn');
@@ -142,6 +146,9 @@ const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const signInBtn = document.getElementById('signInBtn');
 const changePasswordBtn = document.getElementById('changePasswordBtn');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
 const savePasswordBtn = document.getElementById('savePasswordBtn');
 const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
 const newPasswordInput = document.getElementById('newPassword');
@@ -224,6 +231,41 @@ passwordForm.addEventListener('submit', async event => {
     setStatus(error.message || '密码更新失败。', true);
   } finally {
     savePasswordBtn.disabled = false;
+  }
+});
+
+exportBtn.addEventListener('click', async () => {
+  exportBtn.disabled = true;
+  setStatus('正在导出…');
+  try {
+    downloadBackup(await createBackup());
+    setStatus('数据已导出。');
+  } catch (error) {
+    setStatus(error.message || '导出失败。', true);
+  } finally {
+    exportBtn.disabled = false;
+  }
+});
+
+importBtn.addEventListener('click', () => importFile.click());
+
+importFile.addEventListener('change', async () => {
+  const file = importFile.files?.[0];
+  if (!file) return;
+  if (!confirm('恢复会按 id / panel 合并并覆盖同名记录，确定继续？')) {
+    importFile.value = '';
+    return;
+  }
+  importBtn.disabled = true;
+  setStatus('正在恢复…');
+  try {
+    const result = await restoreBackup(JSON.parse(await file.text()));
+    setStatus(`恢复完成：events ${result.events}，panel states ${result.panel_states}，private ${result.panel_private}。`);
+  } catch (error) {
+    setStatus(error.message || '恢复失败。', true);
+  } finally {
+    importBtn.disabled = false;
+    importFile.value = '';
   }
 });
 

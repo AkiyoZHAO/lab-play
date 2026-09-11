@@ -41,3 +41,32 @@ export async function savePanelPrivate(panel, content) {
   if (error) throw error;
   return data;
 }
+
+export async function queryAllPanelStates() {
+  await requireOwner();
+  const { data, error } = await db.from('panel_states')
+    .select('panel, state, updated_at')
+    .order('panel');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function queryAllPanelPrivate() {
+  await requireOwner();
+  const { data, error } = await db.from('panel_private')
+    .select('panel, content, updated_at')
+    .order('panel');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveCareerPanel(state, content, milestones = []) {
+  await requireOwner();
+  const { data, error } = await db.rpc('save_career_panel', {
+    p_state: state,
+    p_private: content,
+    p_milestones: milestones,
+  });
+  if (error) throw error;
+  return data;
+}

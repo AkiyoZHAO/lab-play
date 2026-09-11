@@ -1,0 +1,44 @@
+name: Validate and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 6d515430d8e0ab847349e60f147c85a9
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check static app
+        run: node scripts/check.mjs
+      - name: Check Supabase gates
+        run: node scripts/check-remote.mjs
+      - name: Deploy Cloudflare Worker assets
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.131.0
+          command: deploy
+      - name: Smoke production
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        run: node scripts/check-live.mjs
+      - name: Note missing deploy secret
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        run: echo 'Validation passed; add repository secret CLOUDFLARE_API_TOKEN to enable automatic deployment.'

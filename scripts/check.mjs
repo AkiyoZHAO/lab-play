@@ -40,6 +40,13 @@ const attrPattern = /\b(?:href|src)=["']([^"']+)["']/g;
 const modulePattern = /<script\s+type=["']module["'][^>]*>([\s\S]*?)<\/script>/g;
 for (const file of files.filter(path => extname(path) === '.html')) {
   const html = readFileSync(file, 'utf8');
+  for (const unpinned of [
+    'cdn.jsdelivr.net/npm/@supabase/supabase-js@2"',
+    'cdn.jsdelivr.net/npm/js-yaml@4/',
+    'cdn.jsdelivr.net/npm/marked/marked.min.js',
+  ]) {
+    if (html.includes(unpinned)) failures.push(`${show(file)}: unpinned CDN dependency ${unpinned}`);
+  }
   for (const match of html.matchAll(attrPattern)) {
     const ref = match[1];
     if (ref.includes('${')) continue;
