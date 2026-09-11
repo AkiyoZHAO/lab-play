@@ -1,0 +1,16 @@
+{
+  "achievements": [
+    {
+      "id": "liszt",
+      "name": "李斯特",
+      "category": "Music",
+      "description": "弹钢琴累计 5 小时",
+      "condition": {
+        "type": "activity_minutes",
+        "activity": "弹钢琴",
+        "target": 300
+      },
+      "glyph": "piano"
+    }
+  ]
+}

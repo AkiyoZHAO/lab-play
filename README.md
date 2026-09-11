@@ -21,7 +21,7 @@ lab-play/
 ├── panels/
 │   ├── stats/          Dashboard(events 聚合 + 面板摘要)
 │   ├── career/         事业(公开摘要 + Owner 私有正文/编辑)
-│   └── collection/     图鉴(按 events 解锁卡牌)
+│   └── collection/     成就图鉴(events 累计行为→阈值点亮)
 ├── core/               Supabase/Auth · events · panels 数据入口
 ├── auth/               Owner 邮箱 + 密码登录
 ├── db/                 events schema · RLS 迁移与配置说明

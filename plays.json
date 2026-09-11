@@ -29,7 +29,7 @@
     {
       "id": "collection",
       "name": "Collection",
-      "desc": "从共享时间线点亮抽到过的卡牌。",
+      "desc": "累计行动达到阈值后，点亮人物与称号。",
       "icon": "◇",
       "path": "panels/collection/",
       "status": "active"
