@@ -22,7 +22,7 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 
 ## TODO
 
-- [x] 账号与权限地基:Supabase Auth(magic link,仅我)+ events RLS「anon 只读 / 仅 Owner 可写」+ 前端登录门禁
+- [x] 账号与权限地基:Supabase Auth(邮箱 + 密码,仅我)+ events RLS「anon 只读 / 仅 Owner 可写」+ 前端登录门禁
 - [x] 分层隐私 + career 细节迁库:公开 `panel_states` + Owner-only `panel_private`;下钻登录才看
 - [x] 挂上 akiyolab.com:复用 Cloudflare Worker Static Assets + custom domain,替换旧落地页
 - [x] 统计 → 高密度「总览 Dashboard」(widget 网格)
@@ -42,3 +42,4 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 - **2026-09-11** Supabase 创建唯一 Owner 用户,关闭公开注册,配置正式/预览/本地回跳 URL;events 与 Career 表 RLS 已做 anon 拒写 + Owner 事务试写验证。
 - **2026-09-11** `akiyolab.com` 正式发布 lab-play;线上功能页与匿名门禁通过浏览器回归,仓库元数据/SQL/验收脚本不进入静态资产。
 - **2026-09-11** 删除未定义数据源的「外部打卡」待办,不为清单完整度引入同步复杂度;当前只有 `draw_done.payload.duration` 累计为时间代币,`career_milestone` 只进入共享时间线、不产生代币。
+- **2026-09-11** Owner 登录从 magic link 改为邮箱 + 密码,避免 Supabase 内置邮件限流;登录后可在站内修改密码。

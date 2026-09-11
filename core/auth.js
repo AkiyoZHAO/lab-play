@@ -20,16 +20,17 @@ export function onAuthChange(callback) {
   return () => data.subscription.unsubscribe();
 }
 
-export async function sendMagicLink(email, redirectTo) {
-  const { error } = await db.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: redirectTo,
-      // 账号只由 Supabase 后台预先创建；公开页面不能注册新用户。
-      shouldCreateUser: false,
-    },
-  });
+export async function signInWithPassword(email, password) {
+  const { data, error } = await db.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  return data.session;
+}
+
+export async function updatePassword(password) {
+  await requireOwner();
+  const { data, error } = await db.auth.updateUser({ password });
+  if (error) throw error;
+  return data.user;
 }
 
 export async function signOut() {

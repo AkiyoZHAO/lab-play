@@ -97,11 +97,13 @@
     <h1>Owner</h1>
 
     <div id="signedOut">
-      <p class="hint">使用预先授权的邮箱接收一次性登录链接。</p>
+      <p class="hint">使用预先授权的 Owner 账号登录。</p>
       <form class="form" id="loginForm">
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
-        <button id="sendBtn" type="submit">Send magic link</button>
+        <input id="email" name="email" type="email" autocomplete="username" value="worryless10@gmail.com" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="signInBtn" type="submit">Sign in</button>
       </form>
     </div>
 
@@ -109,22 +111,41 @@
       <p class="hint">已登录为 <span id="account"></span></p>
       <div class="actions">
         <a class="continue" id="continueLink" href="../">Continue</a>
+        <button class="secondary" id="changePasswordBtn" type="button">Change password</button>
         <button class="secondary" id="signOutBtn" type="button">Sign out</button>
       </div>
     </div>
+
+    <form class="form hidden" id="passwordForm">
+      <label for="newPassword">New password</label>
+      <input id="newPassword" name="new-password" type="password" autocomplete="new-password" minlength="12" required>
+      <label for="confirmPassword">Confirm password</label>
+      <input id="confirmPassword" name="confirm-password" type="password" autocomplete="new-password" minlength="12" required>
+      <div class="actions">
+        <button id="savePasswordBtn" type="submit">Save password</button>
+        <button class="secondary" id="cancelPasswordBtn" type="button">Cancel</button>
+      </div>
+    </form>
 
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
 </main>
 
 <script type="module">
-import { getSession, isOwner, onAuthChange, sendMagicLink, signOut } from '../core/auth.js';
+import { getSession, isOwner, onAuthChange, signInWithPassword, signOut, updatePassword } from '../core/auth.js';
 
 const signedOut = document.getElementById('signedOut');
 const signedIn = document.getElementById('signedIn');
 const loginForm = document.getElementById('loginForm');
+const passwordForm = document.getElementById('passwordForm');
 const emailInput = document.getElementById('email');
-const sendBtn = document.getElementById('sendBtn');
+const passwordInput = document.getElementById('password');
+const signInBtn = document.getElementById('signInBtn');
+const changePasswordBtn = document.getElementById('changePasswordBtn');
+const savePasswordBtn = document.getElementById('savePasswordBtn');
+const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
+const newPasswordInput = document.getElementById('newPassword');
+const confirmPasswordInput = document.getElementById('confirmPassword');
 const signOutBtn = document.getElementById('signOutBtn');
 const account = document.getElementById('account');
 const statusEl = document.getElementById('status');
@@ -150,6 +171,7 @@ function renderSession(session) {
   const owner = isOwner(session);
   signedOut.classList.toggle('hidden', Boolean(session));
   signedIn.classList.toggle('hidden', !session);
+  passwordForm.classList.add('hidden');
   continueLink.classList.toggle('hidden', !owner);
   account.textContent = session?.user?.email || '';
 
@@ -164,15 +186,44 @@ function renderSession(session) {
 
 loginForm.addEventListener('submit', async event => {
   event.preventDefault();
-  sendBtn.disabled = true;
-  setStatus('正在发送…');
+  signInBtn.disabled = true;
+  setStatus('正在登录…');
   try {
-    await sendMagicLink(emailInput.value.trim(), location.href);
-    setStatus('登录链接已发送，请检查邮箱。');
+    const session = await signInWithPassword(emailInput.value.trim(), passwordInput.value);
+    renderSession(session);
   } catch (error) {
-    setStatus(error.message || '发送失败，请稍后重试。', true);
+    setStatus(error.message || '登录失败，请检查邮箱和密码。', true);
   } finally {
-    sendBtn.disabled = false;
+    signInBtn.disabled = false;
+  }
+});
+
+changePasswordBtn.addEventListener('click', () => {
+  signedIn.classList.add('hidden');
+  passwordForm.classList.remove('hidden');
+  setStatus('');
+  newPasswordInput.focus();
+});
+
+cancelPasswordBtn.addEventListener('click', async () => renderSession(await getSession()));
+
+passwordForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (newPasswordInput.value !== confirmPasswordInput.value) {
+    setStatus('两次输入的密码不一致。', true);
+    return;
+  }
+  savePasswordBtn.disabled = true;
+  setStatus('正在保存…');
+  try {
+    await updatePassword(newPasswordInput.value);
+    passwordForm.reset();
+    renderSession(await getSession());
+    setStatus('密码已更新。');
+  } catch (error) {
+    setStatus(error.message || '密码更新失败。', true);
+  } finally {
+    savePasswordBtn.disabled = false;
   }
 });
 
