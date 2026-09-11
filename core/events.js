@@ -13,10 +13,8 @@
 // 放在 import 本模块的 <script type="module"> 之前。
 // =============================================================
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-
-// 复用页面通过 CDN 挂到 window 上的 supabase 全局对象创建 client。
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { db } from './supabase.js';
+import { requireOwner } from './auth.js';
 
 /**
  * 写入一条 event。
@@ -26,6 +24,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
  * @returns {Promise<{id:number, created_at:string}>}
  */
 export async function logEvent(play, type, payload = {}) {
+  await requireOwner();
   const { data, error } = await db.from('events')
     .insert({ play, type, payload })
     .select('id, created_at')
@@ -41,6 +40,7 @@ export async function logEvent(play, type, payload = {}) {
  * @returns {Promise<object>}
  */
 export async function updateEvent(id, patch) {
+  await requireOwner();
   const { data, error } = await db.from('events')
     .update(patch)
     .eq('id', id)

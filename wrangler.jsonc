@@ -1,0 +1,11 @@
+{
+  "name": "akiyolab",
+  "compatibility_date": "2026-09-11",
+  "assets": {
+    "directory": "."
+  },
+  "routes": [
+    { "pattern": "akiyolab.com", "custom_domain": true },
+    { "pattern": "www.akiyolab.com", "custom_domain": true }
+  ]
+}

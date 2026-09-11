@@ -2,7 +2,7 @@
 
 一个自己拥有的**个人空间**,承载我的人生系统。纯静态、自建、UI 可换,不寄居别人平台。
 
-**→ [akiyozhao.github.io/lab-play](https://akiyozhao.github.io/lab-play/)**
+**→ [akiyolab.com](https://akiyolab.com/)**（正式） · [GitHub Pages](https://akiyozhao.github.io/lab-play/)（预览）
 
 - **玩法 Play** — 一次性行动,写 events(如抽卡)
 - **面板 Panel** — 展示 / 维护状态(如统计、事业)
@@ -19,13 +19,24 @@ lab-play/
 ├── plays/
 │   └── draw/           抽卡
 ├── panels/
-│   ├── stats/          统计(读 events)
-│   └── career/         事业(读 career-turnaround.md)
-├── core/               config.js · events.js(事件读写唯一入口)
-├── db/                 schema.sql:events 表 + RLS
+│   ├── stats/          Dashboard(events 聚合 + 面板摘要)
+│   ├── career/         事业(公开摘要 + Owner 私有正文/编辑)
+│   └── collection/     图鉴(按 events 解锁卡牌)
+├── core/               Supabase/Auth · events · panels 数据入口
+├── auth/               Owner magic link 登录
+├── db/                 events schema · RLS 迁移与配置说明
 ├── design/             tokens.css(唯一视觉来源)· DESIGN.md
+├── skins/              首页 anchor→视觉映射 + 默认兜底
+├── scripts/            本地静态验收 + Supabase 远端权限验收
+├── wrangler.jsonc      akiyolab.com 的 Worker Static Assets 部署
 ├── README.md
 ├── AGENTS.md           agent 规则
 └── ROADMAP.md          蓝图 · 待办 · 决策
 ```
 
+## 验收
+
+```bash
+node scripts/check.mjs         # 本地静态结构 / 语法 / 数据层边界
+node scripts/check-remote.mjs  # Supabase Auth / RLS / 面板表
+```

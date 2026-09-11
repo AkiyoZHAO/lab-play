@@ -1,9 +1,11 @@
 ---
 # ═══════════════════════════════════════════════════════════════
-# 事业面板 · 数据契约(方案 B)
-# 结构化状态全部住在这份 frontmatter —— 这是唯一来源,网站只读这里渲染。
-# 正文只放叙事(表格 / case / narrative),不再重复写 Status。
-# 推进状态 = 改这里的字段;跨里程碑时向 events 记一条(见 ROADMAP)。
+# 事业面板 · 初始模板 / 数据契约
+# frontmatter 是公开摘要的初始值与数据库不可用时的只读 fallback。
+# 线上当前摘要由 panel_states 持有；Owner 在网页内更新。
+# 正文只是空白模板，Owner 首次使用时载入；填写后的私人正文只存 panel_private。
+# 不要把个人经历、公司、薪资、联系人等敏感内容提交进这份公开文件。
+# 状态跨档时由网页向 events 写 career_milestone。
 # ═══════════════════════════════════════════════════════════════
 
 # ── 面板身份 ──────────────────────────────────────────────
@@ -11,7 +13,7 @@ title: Career Turnaround
 slug: career-turnaround
 kind: panel            # 在 lab-play 里这是一个「面板」(state 型工具)
 domain: career         # 归属领域(领域是面板分级的一层,暂未展开为一级导航)
-schema_version: 0.2    # 0.1→0.2:状态提取进 frontmatter(方案 B)
+schema_version: 1      # panel_states / panel_private 数据契约
 last_updated: 2026-09-10
 review_cycle: weekly
 
@@ -21,12 +23,12 @@ readiness_level: 0     # 0–5,见正文「Readiness level」图例
 career_rto: unknown    # 失业后进入正式面试所需的恢复时间
 
 # 关键焦点(供 Dashboard widget、首页卡的「下一步」一行直接取)
-primary_lanes: []
-current_bottleneck: ""
-biggest_unknown: ""
-next_action: ""
+primary_lanes: []       # 私有初始值:首次写库时迁入 panel_private.meta
+current_bottleneck: "" # 私有初始值
+biggest_unknown: ""    # 私有初始值
+next_action: ""        # 公开摘要:不要填写敏感细节
 
-# ── 9 条子技能线的状态(唯一来源;正文对应 section 不再写 Status)──
+# ── 9 条子技能线的初始状态(panel_states 无记录时使用)──
 # status ∈ EMPTY | MAPPED | BUILT | TESTED | MAINTAINED(见正文「Status scale」)
 # confidence: 0–5   dod: 已完成 / 该线 Definition of done 总数
 sections:
@@ -63,7 +65,7 @@ activation:
 > `enabled = true` does **not** mean “I can get any offer anytime”.
 > It means: I know the market, know my position, know my gaps, have a usable resume and evidence bank, can enter interview-prep mode quickly, know where opportunities come from, and know how to decide whether an opportunity is worth taking.
 
-> **本文档是「事业面板」的自持状态(文档态)。** 仪表盘、9 条线的状态、通关进度都由上方 frontmatter 提供,网站据此渲染;下面的正文是每条线的叙事与填写区。推进方式:编辑 frontmatter 的字段 + 在对应正文里补内容。
+> **本文档是公开空白模板，不是线上私有数据。** 首次加载或数据库尚无记录时，页面用上方 frontmatter 作为摘要初值；Owner 登录后在网页内编辑，摘要存 `panel_states`，下面各线填写后的正文存 `panel_private`。不要把私人内容直接提交到本文档。
 
 ---
 
@@ -648,4 +650,5 @@ Re-evaluate immediately if:
 | Date | Change | Why |
 |---|---|---|
 | 2026-09-09 | Created schema v0.1 | Turn “随时转身” into a visible and maintainable career skill |
-| 2026-09-10 | v0.2:状态提取进 frontmatter(方案 B) | 让「事业面板」可被网站解析渲染;状态与叙事分区,唯一来源在 frontmatter |
+| 2026-09-10 | v0.2:状态提取进 frontmatter(方案 B) | 让「事业面板」可被网站解析渲染;状态与叙事分区 |
+| 2026-09-11 | v1:数据库分层 | frontmatter 降为公开初值;线上摘要进 panel_states,私有正文进 panel_private |

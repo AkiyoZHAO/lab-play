@@ -5,11 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Career · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-  /* 事业面板：概览读 frontmatter（方案 B），点卡片下钻读同一份 md 的正文段。
-     文案极简，状态 5 档用现有墨色阶由浅到深（DESIGN.md〔六〕），不写死颜色。 */
   .shell {
     max-width: var(--content-max);
     margin: 0 auto;
@@ -17,30 +16,55 @@
   }
   .back {
     display: inline-block;
-    font-size: var(--fs-sm);
     color: var(--c-text-muted);
+    font-size: var(--fs-sm);
     cursor: pointer;
     transition: color var(--dur-fast) var(--ease-out);
   }
   .back:hover { color: var(--c-text); }
+  .page-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--sp-5);
+    margin: var(--sp-6) 0 var(--sp-7);
+  }
   h1 {
+    margin: 0;
     font-family: var(--font-serif);
     font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
     letter-spacing: var(--ls-tight);
-    margin: var(--sp-6) 0 var(--sp-7);
   }
-
+  .owner-tools { display: flex; align-items: center; gap: var(--sp-3); }
+  .owner-state { color: var(--c-text-faint); font-size: var(--fs-xs); }
+  button, .button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-2) var(--sp-4);
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    transition: border-color var(--dur-fast) var(--ease-out),
+                background var(--dur-fast) var(--ease-out);
+  }
+  button:hover, .button-link:hover { border-color: var(--c-line-strong); }
+  button:disabled { cursor: default; opacity: 0.55; }
+  .primary { color: var(--c-surface); background: var(--c-accent); border-color: var(--c-accent); }
+  .primary:hover { background: var(--c-accent-hover); border-color: var(--c-accent-hover); }
   .status {
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
     padding: var(--sp-8) 0;
     text-align: center;
   }
+  .status.compact { padding: var(--sp-3) 0; text-align: left; }
   .status.error { color: var(--c-negative); }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
 
-  /* 仪表盘：等级 / RTO / 通关 */
   .dash {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -50,27 +74,21 @@
     border-bottom: 1px solid var(--c-line);
   }
   .dash-label {
+    margin-bottom: var(--sp-3);
+    color: var(--c-text-faint);
     font-size: var(--fs-xs);
     letter-spacing: var(--ls-wide);
-    color: var(--c-text-faint);
-    margin-bottom: var(--sp-3);
+    text-transform: uppercase;
   }
   .dash-value {
     font-family: var(--font-serif);
     font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
-    letter-spacing: var(--ls-tight);
     line-height: var(--lh-tight);
   }
   .pips { display: flex; gap: var(--sp-1); margin-top: var(--sp-3); }
-  .pip {
-    flex: 1;
-    height: var(--sp-2);
-    border-radius: var(--radius-full);
-    background: var(--c-line);
-  }
+  .pip { flex: 1; height: var(--sp-2); background: var(--c-line); border-radius: var(--radius-full); }
   .pip.on { background: var(--c-accent); }
-
   .next { margin-bottom: var(--sp-7); }
   .next .dash-label { margin-bottom: var(--sp-2); }
   .next-text { font-size: var(--fs-sm); }
@@ -81,140 +99,121 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: var(--sp-4);
   }
-  /* 卡片可点：hover 抬起 + 描边加重，和主菜单入口一致的语言 */
   .card {
+    padding: var(--sp-5);
     background: var(--c-surface);
     border: 1px solid var(--c-line);
     border-radius: var(--radius-lg);
-    padding: var(--sp-5);
     box-shadow: var(--shadow-sm);
     cursor: pointer;
     transition: border-color var(--dur-base) var(--ease-out),
                 box-shadow var(--dur-base) var(--ease-out),
                 transform var(--dur-base) var(--ease-out);
   }
-  .card:hover {
-    border-color: var(--c-line-strong);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-  }
-  .card-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--sp-3);
-    margin-bottom: var(--sp-4);
-  }
-  .card-idx {
-    font-family: var(--font-serif);
-    font-size: var(--fs-xs);
-    color: var(--c-text-faint);
-    margin-right: var(--sp-1);
-  }
-  .card-name {
-    font-size: var(--fs-base);
-    font-weight: var(--fw-medium);
-    letter-spacing: var(--ls-tight);
-  }
-
-  /* 状态 badge：5 档墨色由浅到深，全部取自现有 token */
+  .card:hover { border-color: var(--c-line-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+  .card-idx { margin-right: var(--sp-1); color: var(--c-text-faint); font-family: var(--font-serif); font-size: var(--fs-xs); }
+  .card-name { font-size: var(--fs-base); font-weight: var(--fw-medium); letter-spacing: var(--ls-tight); }
   .badge {
+    padding: var(--sp-1) var(--sp-3);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-full);
     font-size: var(--fs-xs);
     letter-spacing: var(--ls-wide);
-    padding: 2px var(--sp-3);
-    border-radius: var(--radius-full);
-    border: 1px solid var(--c-line);
     white-space: nowrap;
   }
-  .badge.st-empty       { background: var(--c-surface-alt);   color: var(--c-text-faint); border-color: var(--c-line); }
-  .badge.st-mapped      { background: var(--rar-r-surface);   color: var(--rar-r-ink);    border-color: var(--rar-r-line); }
-  .badge.st-built       { background: var(--rar-all-surface); color: var(--rar-all-ink);  border-color: var(--rar-all-line); }
-  .badge.st-tested      { background: var(--rar-sr-surface);  color: var(--rar-sr-ink);   border-color: var(--rar-sr-line); }
-  .badge.st-maintained  { background: var(--rar-ssr-surface); color: var(--rar-ssr-ink);  border-color: var(--rar-ssr-line); }
-
+  .badge.st-empty { color: var(--c-text-faint); background: var(--c-surface-alt); border-color: var(--c-line); }
+  .badge.st-mapped { color: var(--rar-r-ink); background: var(--rar-r-surface); border-color: var(--rar-r-line); }
+  .badge.st-built { color: var(--rar-all-ink); background: var(--rar-all-surface); border-color: var(--rar-all-line); }
+  .badge.st-tested { color: var(--rar-sr-ink); background: var(--rar-sr-surface); border-color: var(--rar-sr-line); }
+  .badge.st-maintained { color: var(--rar-ssr-ink); background: var(--rar-ssr-surface); border-color: var(--rar-ssr-line); }
   .dod { display: flex; align-items: center; gap: var(--sp-3); }
-  .dod-track {
-    flex: 1;
-    height: var(--sp-1);
-    background: var(--c-surface-alt);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-  }
+  .dod-track { flex: 1; height: var(--sp-1); overflow: hidden; background: var(--c-surface-alt); border-radius: var(--radius-full); }
   .dod-fill { height: 100%; background: var(--c-accent); border-radius: var(--radius-full); }
-  .dod-num {
-    font-size: var(--fs-xs);
-    color: var(--c-text-muted);
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-  }
+  .dod-num { color: var(--c-text-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 
-  /* ── 下钻详情：把 md 正文段渲染成 HTML，样式全用 token ── */
-  #detail .back { margin-bottom: var(--sp-5); }
+  .private-gate {
+    max-width: var(--content-narrow);
+    margin: var(--sp-8) auto;
+    padding: var(--sp-6);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-xl);
+    text-align: center;
+  }
+  .private-gate p { margin: 0 0 var(--sp-5); color: var(--c-text-muted); font-size: var(--fs-sm); }
+  .detail-head, .editor-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-5); }
   .prose { font-size: var(--fs-sm); line-height: var(--lh-base); }
   .prose > :first-child { margin-top: 0; }
-  .prose h1 {
-    font-family: var(--font-serif);
-    font-size: var(--fs-lg);
-    margin: 0 0 var(--sp-5);
-    letter-spacing: var(--ls-tight);
-  }
-  .prose h2 {
-    font-size: var(--fs-base);
-    font-weight: var(--fw-bold);
-    margin: var(--sp-6) 0 var(--sp-3);
-  }
-  .prose h3 {
-    font-size: var(--fs-sm);
-    font-weight: var(--fw-bold);
-    color: var(--c-text-muted);
-    margin: var(--sp-5) 0 var(--sp-2);
-  }
+  .prose h1 { margin: 0 0 var(--sp-5); font-family: var(--font-serif); font-size: var(--fs-lg); letter-spacing: var(--ls-tight); }
+  .prose h2 { margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-base); font-weight: var(--fw-bold); }
+  .prose h3 { margin: var(--sp-5) 0 var(--sp-2); color: var(--c-text-muted); font-size: var(--fs-sm); font-weight: var(--fw-bold); }
   .prose p { margin: var(--sp-3) 0; }
   .prose ul, .prose ol { margin: var(--sp-3) 0; padding-left: var(--sp-5); }
   .prose li { margin: var(--sp-1) 0; }
-  .prose li input[type="checkbox"] { margin-right: var(--sp-2); }
-  .prose blockquote {
-    margin: var(--sp-3) 0;
-    padding: var(--sp-1) var(--sp-4);
-    border-left: 2px solid var(--c-line-strong);
-    color: var(--c-text-muted);
-  }
-  .prose code {
-    background: var(--c-surface-alt);
-    border-radius: var(--radius-sm);
-    padding: 1px var(--sp-1);
-    font-size: 0.9em;
-  }
-  .prose hr { border: none; border-top: 1px solid var(--c-line); margin: var(--sp-6) 0; }
-  /* 表格：横向可滚，描边克制，表头浅底 */
-  .prose table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: var(--sp-4) 0;
-    font-size: var(--fs-xs);
-  }
-  .prose th, .prose td {
-    border: 1px solid var(--c-line);
-    padding: var(--sp-2) var(--sp-3);
-    text-align: left;
-    vertical-align: top;
-  }
+  .prose blockquote { margin: var(--sp-3) 0; padding: var(--sp-1) var(--sp-4); color: var(--c-text-muted); border-left: 2px solid var(--c-line-strong); }
+  .prose code { padding: var(--sp-1); background: var(--c-surface-alt); border-radius: var(--radius-sm); font-size: 0.9em; }
+  .prose hr { margin: var(--sp-6) 0; border: 0; border-top: 1px solid var(--c-line); }
+  .prose table { width: 100%; margin: var(--sp-4) 0; border-collapse: collapse; font-size: var(--fs-xs); }
+  .prose th, .prose td { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--c-line); text-align: left; vertical-align: top; }
   .prose th { background: var(--c-surface-alt); font-weight: var(--fw-medium); white-space: nowrap; }
-  .prose .table-wrap { overflow-x: auto; }
+  .table-wrap { overflow-x: auto; }
+
+  .editor {
+    padding: var(--sp-5);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-lg);
+  }
+  .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4); }
+  .field { display: grid; gap: var(--sp-2); }
+  .field.wide { grid-column: 1 / -1; }
+  label { color: var(--c-text-muted); font-size: var(--fs-xs); letter-spacing: var(--ls-wide); }
+  input, select, textarea {
+    width: 100%;
+    padding: var(--sp-3);
+    color: var(--c-text);
+    background: var(--c-bg);
+    border: 1px solid var(--c-line-strong);
+    border-radius: var(--radius-md);
+    font: inherit;
+  }
+  textarea { min-height: 55vh; resize: vertical; font-family: var(--font-sans); font-size: var(--fs-sm); line-height: var(--lh-base); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--c-accent-soft); border-color: var(--c-accent); }
+  .section-editor { display: grid; grid-template-columns: minmax(170px, 1fr) repeat(4, minmax(70px, auto)); gap: var(--sp-3); align-items: end; padding: var(--sp-3) 0; border-bottom: 1px solid var(--c-line); }
+  .section-editor:last-child { border-bottom: 0; }
+  .section-editor-name { align-self: center; font-size: var(--fs-sm); }
+  .activation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2) var(--sp-4); }
+  .check { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+  .check input { width: auto; }
+  .form-actions { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-5); }
+  .save-note { color: var(--c-text-muted); font-size: var(--fs-xs); }
 
   @media (max-width: 720px) {
-    .dash { grid-template-columns: 1fr; gap: var(--sp-6); }
+    .page-head { align-items: flex-start; }
+    .owner-tools { flex-direction: column; align-items: flex-end; }
+    .dash, .form-grid { grid-template-columns: 1fr; }
+    .section-editor { grid-template-columns: repeat(2, 1fr); }
+    .section-editor-name { grid-column: 1 / -1; }
+    .activation-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
-<div class="shell">
-  <a class="back" href="../../index.html">← Back</a>
-  <h1>Career</h1>
+<main class="shell">
+  <a class="back" data-anchor="back" href="../../index.html">← Back</a>
+  <header class="page-head">
+    <h1>Career</h1>
+    <div class="owner-tools">
+      <span class="owner-state" id="ownerState">Public view</span>
+      <a class="button-link" id="loginLink" href="../../auth/?next=../panels/career/">Owner login</a>
+      <button class="hidden" data-anchor="state-edit" id="editStateBtn" type="button">Edit state</button>
+    </div>
+  </header>
 
   <div class="status" id="status">Loading…</div>
 
-  <div id="overview" class="hidden">
+  <section class="hidden" data-anchor="state-view" id="overview">
     <div class="dash">
       <div>
         <div class="dash-label">Level</div>
@@ -235,18 +234,87 @@
       <div class="dash-label">Next</div>
       <div class="next-text" id="nextText"></div>
     </div>
-
     <div class="cards" id="cards"></div>
-  </div>
+  </section>
 
-  <div id="detail" class="hidden">
-    <a class="back" id="toOverview">↑ Overview</a>
+  <section class="hidden" id="privateGate">
+    <div class="private-gate">
+      <p>Career 详情包含私人材料，仅 Owner 登录后可见。</p>
+      <a class="button-link primary" href="../../auth/?next=../panels/career/">Owner login</a>
+    </div>
+  </section>
+
+  <section class="hidden" id="detail">
+    <div class="detail-head">
+      <button class="back" id="toOverview" type="button">← Overview</button>
+      <button class="hidden" id="editDetailBtn" type="button">Edit detail</button>
+    </div>
     <div class="prose" id="detailBody"></div>
-  </div>
-</div>
+  </section>
 
-<script>
-// 序号 + 展示名（顺序即文档顺序，与 frontmatter sections 的 key 一致）
+  <section class="editor hidden" id="stateEditor">
+    <div class="editor-head">
+      <h1>Public state</h1>
+      <button id="cancelStateBtn" type="button">Cancel</button>
+    </div>
+    <form id="stateForm">
+      <div class="form-grid">
+        <div class="field">
+          <label for="readinessInput">Readiness level</label>
+          <select id="readinessInput"></select>
+        </div>
+        <div class="field">
+          <label for="rtoInput">Career RTO</label>
+          <input id="rtoInput" type="text">
+        </div>
+        <div class="field wide">
+          <label for="nextInput">Next action</label>
+          <input id="nextInput" type="text">
+        </div>
+        <div class="field wide">
+          <label for="lanesInput">Primary lanes · Private（逗号分隔）</label>
+          <input id="lanesInput" type="text">
+        </div>
+        <div class="field wide">
+          <label for="bottleneckInput">Current bottleneck · Private</label>
+          <input id="bottleneckInput" type="text">
+        </div>
+        <div class="field wide">
+          <label for="unknownInput">Biggest unknown · Private</label>
+          <input id="unknownInput" type="text">
+        </div>
+      </div>
+      <div class="dash-label">Sections</div>
+      <div id="sectionFields"></div>
+      <div class="dash-label">Activation</div>
+      <div class="activation-grid" id="activationFields"></div>
+      <div class="form-actions">
+        <button class="primary" data-anchor="milestone" id="saveStateBtn" type="submit">Save state</button>
+        <span class="save-note" id="stateSaveNote"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="editor hidden" id="detailEditor">
+    <div class="editor-head">
+      <h1 id="detailEditorTitle">Private detail</h1>
+      <button id="cancelDetailBtn" type="button">Cancel</button>
+    </div>
+    <textarea id="detailInput" spellcheck="false"></textarea>
+    <div class="form-actions">
+      <button class="primary" id="saveDetailBtn" type="button">Save private detail</button>
+      <span class="save-note" id="detailSaveNote"></span>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { getSession, isOwner, onAuthChange } from '../../core/auth.js';
+import { logEvent } from '../../core/events.js';
+import { queryPanelPrivate, queryPanelState, savePanelPrivate, savePanelState } from '../../core/panels.js';
+
+const PANEL = 'career';
+const STATUS_ORDER = ['EMPTY', 'MAPPED', 'BUILT', 'TESTED', 'MAINTAINED'];
 const SECTION_META = {
   market_map:          { idx: 1, name: 'Market Map' },
   target_positioning:  { idx: 2, name: 'Target Positioning' },
@@ -258,131 +326,347 @@ const SECTION_META = {
   decision_framework:  { idx: 8, name: 'Decision Framework' },
   maintenance:         { idx: 9, name: 'Maintenance' },
 };
-
 const STATUS_META = {
-  EMPTY:       { label: 'Empty',      cls: 'st-empty' },
-  MAPPED:      { label: 'Mapped',     cls: 'st-mapped' },
-  BUILT:       { label: 'Built',      cls: 'st-built' },
-  TESTED:      { label: 'Tested',     cls: 'st-tested' },
-  MAINTAINED:  { label: 'Maintained', cls: 'st-maintained' },
+  EMPTY:      { label: 'Empty', cls: 'st-empty' },
+  MAPPED:     { label: 'Mapped', cls: 'st-mapped' },
+  BUILT:      { label: 'Built', cls: 'st-built' },
+  TESTED:     { label: 'Tested', cls: 'st-tested' },
+  MAINTAINED: { label: 'Maintained', cls: 'st-maintained' },
 };
 
-function esc(s) {
-  return String(s)
+const statusEl = document.getElementById('status');
+const overviewEl = document.getElementById('overview');
+const privateGate = document.getElementById('privateGate');
+const detailEl = document.getElementById('detail');
+const detailBody = document.getElementById('detailBody');
+const stateEditor = document.getElementById('stateEditor');
+const detailEditor = document.getElementById('detailEditor');
+const cardsEl = document.getElementById('cards');
+const loginLink = document.getElementById('loginLink');
+const editStateBtn = document.getElementById('editStateBtn');
+const editDetailBtn = document.getElementById('editDetailBtn');
+const ownerState = document.getElementById('ownerState');
+
+let templateState = null;
+let templateSections = {};
+let templatePrivateMeta = {};
+let currentState = null;
+let privateSections = {};
+let privateMeta = {};
+let currentSectionKey = null;
+let owner = false;
+let privateLoaded = false;
+
+function esc(value) {
+  return String(value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function parseDod(str) {
-  const m = String(str || '').match(/(\d+)\s*\/\s*(\d+)/);
-  if (!m) return { done: 0, total: 0 };
-  return { done: Number(m[1]), total: Number(m[2]) };
+function parseDod(value) {
+  const match = String(value || '').match(/(\d+)\s*\/\s*(\d+)/);
+  return match ? { done: Number(match[1]), total: Number(match[2]) } : { done: 0, total: 0 };
 }
 
-// 把 md 正文（frontmatter 之后）按 `---` 切块，取形如 `# N. Title` 的编号段，按序号存
 function parseBodySections(body) {
-  const byIdx = {};
+  const sections = {};
   for (const chunk of body.split(/\r?\n---\r?\n/)) {
-    const m = chunk.trim().match(/^#\s+(\d+)\.\s+.+/);
-    if (m) byIdx[Number(m[1])] = chunk.trim();
+    const match = chunk.trim().match(/^#\s+(\d+)\.\s+.+/);
+    if (match) sections[Object.keys(SECTION_META).find(key => SECTION_META[key].idx === Number(match[1]))] = chunk.trim();
   }
-  return byIdx;
+  return sections;
 }
 
-const statusEl   = document.getElementById('status');
-const overviewEl = document.getElementById('overview');
-const detailEl   = document.getElementById('detail');
-const detailBody = document.getElementById('detailBody');
-let bodyByIdx = {};
+function publicState(source) {
+  return {
+    schema_version: 1,
+    enabled: Boolean(source?.enabled),
+    readiness_level: Math.max(0, Math.min(5, Number(source?.readiness_level) || 0)),
+    career_rto: source?.career_rto || 'unknown',
+    next_action: source?.next_action || '',
+    sections: structuredClone(source?.sections || {}),
+    activation: structuredClone(source?.activation || {}),
+  };
+}
 
-function showDetail(key) {
-  const idx = SECTION_META[key]?.idx;
-  const md = bodyByIdx[idx];
-  if (!md) return;
-  // 表格套一层 .table-wrap 以便窄屏横向滚动
-  detailBody.innerHTML = marked.parse(md)
-    .replace(/<table>/g, '<div class="table-wrap"><table>')
-    .replace(/<\/table>/g, '</table></div>');
-  overviewEl.classList.add('hidden');
-  detailEl.classList.remove('hidden');
+function panelError(error) {
+  return error?.code === 'PGRST205' || /panel_(states|private)/.test(error?.message || '');
+}
+
+function showOnly(target) {
+  for (const element of [overviewEl, privateGate, detailEl, stateEditor, detailEditor]) {
+    element.classList.toggle('hidden', element !== target);
+  }
   window.scrollTo(0, 0);
 }
 
-function showOverview() {
-  detailEl.classList.add('hidden');
-  overviewEl.classList.remove('hidden');
-  window.scrollTo(0, 0);
+function flash(message, error = false) {
+  statusEl.textContent = message;
+  statusEl.classList.toggle('error', error);
+  statusEl.classList.add('compact');
+  statusEl.classList.remove('hidden');
 }
 
-document.getElementById('toOverview').addEventListener('click', showOverview);
+function renderOverview() {
+  const state = currentState;
+  const level = state.readiness_level;
+  document.getElementById('lvValue').textContent = `Lv.${level} / 5`;
+  document.getElementById('pips').innerHTML = Array.from({ length: 5 }, (_, index) =>
+    `<span class="pip${index < level ? ' on' : ''}"></span>`).join('');
+  document.getElementById('rtoValue').textContent = state.career_rto === 'unknown' ? 'Unknown' : state.career_rto;
+  const activation = Object.values(state.activation || {});
+  document.getElementById('actValue').textContent = `${activation.filter(Boolean).length} / ${activation.length}`;
+  const next = document.getElementById('nextText');
+  next.textContent = state.next_action || '—';
+  next.classList.toggle('empty', !state.next_action);
 
-function render(fm) {
-  const lv = Math.max(0, Math.min(5, Number(fm.readiness_level) || 0));
-  document.getElementById('lvValue').textContent = `Lv.${lv} / 5`;
-  document.getElementById('pips').innerHTML =
-    Array.from({ length: 5 }, (_, i) =>
-      `<span class="pip${i < lv ? ' on' : ''}"></span>`).join('');
-
-  const rto = fm.career_rto;
-  document.getElementById('rtoValue').textContent =
-    (rto == null || rto === 'unknown' || rto === '') ? 'Unknown' : String(rto);
-
-  const actVals = Object.values(fm.activation || {});
-  document.getElementById('actValue').textContent =
-    `${actVals.filter(Boolean).length} / ${actVals.length}`;
-
-  const nextEl = document.getElementById('nextText');
-  if (fm.next_action) {
-    nextEl.textContent = fm.next_action;
-    nextEl.classList.remove('empty');
-  } else {
-    nextEl.textContent = '—';
-    nextEl.classList.add('empty');
-  }
-
-  const cardsEl = document.getElementById('cards');
-  cardsEl.innerHTML = Object.entries(fm.sections || {}).map(([key, s]) => {
+  cardsEl.innerHTML = Object.entries(state.sections || {}).map(([key, section]) => {
     const meta = SECTION_META[key] || { idx: '', name: key };
-    const st = STATUS_META[s.status] || STATUS_META.EMPTY;
-    const { done, total } = parseDod(s.dod);
-    const pct = total ? (done / total) * 100 : 0;
-    const clickable = bodyByIdx[meta.idx] ? ' data-key="' + key + '"' : '';
-    return `<div class="card"${clickable}>
+    const status = STATUS_META[section.status] || STATUS_META.EMPTY;
+    const { done, total } = parseDod(section.dod);
+    const percent = total ? done / total * 100 : 0;
+    return `<article class="card" data-anchor="child:${key}" data-key="${key}" tabindex="0">
       <div class="card-head">
         <span><span class="card-idx">${meta.idx}</span><span class="card-name">${esc(meta.name)}</span></span>
-        <span class="badge ${st.cls}">${st.label}</span>
+        <span class="badge ${status.cls}">${status.label}</span>
       </div>
       <div class="dod">
-        <div class="dod-track"><div class="dod-fill" style="width:${pct}%"></div></div>
+        <div class="dod-track"><div class="dod-fill" style="width:${percent}%"></div></div>
         <span class="dod-num">${done}/${total}</span>
       </div>
-    </div>`;
+    </article>`;
   }).join('');
-
-  cardsEl.addEventListener('click', (e) => {
-    const card = e.target.closest('.card[data-key]');
-    if (card) showDetail(card.dataset.key);
-  });
-
   statusEl.classList.add('hidden');
-  overviewEl.classList.remove('hidden');
+  showOnly(overviewEl);
 }
 
-(async () => {
+async function ensurePrivate() {
+  if (!owner || privateLoaded) return;
   try {
-    const res = await fetch('./career-turnaround.md', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (!m) throw new Error('no frontmatter');
-    bodyByIdx = parseBodySections(text.slice(m[0].length));
-    render(jsyaml.load(m[1]));
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Failed to load (open via a static server).';
-    statusEl.classList.add('error');
+    const row = await queryPanelPrivate(PANEL);
+    privateSections = structuredClone(row?.content?.sections || templateSections);
+    privateMeta = structuredClone(row?.content?.meta || templatePrivateMeta);
+    privateLoaded = true;
+  } catch (error) {
+    if (panelError(error)) {
+      privateSections = structuredClone(templateSections);
+      privateMeta = structuredClone(templatePrivateMeta);
+      throw new Error('私有表尚未部署，请先执行 Career 数据库迁移。');
+    }
+    throw error;
   }
-})();
+}
+
+async function openDetail(key) {
+  currentSectionKey = key;
+  if (!owner) {
+    showOnly(privateGate);
+    return;
+  }
+  try {
+    await ensurePrivate();
+    const markdown = privateSections[key] || `# ${SECTION_META[key]?.idx || ''}. ${SECTION_META[key]?.name || key}`;
+    detailBody.innerHTML = marked.parse(markdown)
+      .replace(/<table>/g, '<div class="table-wrap"><table>')
+      .replace(/<\/table>/g, '</table></div>');
+    editDetailBtn.classList.remove('hidden');
+    showOnly(detailEl);
+  } catch (error) {
+    statusEl.textContent = error.message || '读取私有详情失败。';
+    statusEl.classList.add('error');
+    statusEl.classList.remove('hidden');
+  }
+}
+
+function fillStateForm() {
+  document.getElementById('readinessInput').innerHTML = Array.from({ length: 6 }, (_, level) =>
+    `<option value="${level}"${level === currentState.readiness_level ? ' selected' : ''}>${level}</option>`).join('');
+  document.getElementById('rtoInput').value = currentState.career_rto || 'unknown';
+  document.getElementById('nextInput').value = currentState.next_action || '';
+  document.getElementById('lanesInput').value = (privateMeta.primary_lanes || []).join(', ');
+  document.getElementById('bottleneckInput').value = privateMeta.current_bottleneck || '';
+  document.getElementById('unknownInput').value = privateMeta.biggest_unknown || '';
+  document.getElementById('sectionFields').innerHTML = Object.entries(currentState.sections).map(([key, section]) => {
+    const { done, total } = parseDod(section.dod);
+    const options = STATUS_ORDER.map(value => `<option value="${value}"${value === section.status ? ' selected' : ''}>${STATUS_META[value].label}</option>`).join('');
+    return `<div class="section-editor" data-section="${key}">
+      <div class="section-editor-name">${SECTION_META[key]?.idx || ''} ${esc(SECTION_META[key]?.name || key)}</div>
+      <div class="field"><label>Status</label><select data-field="status">${options}</select></div>
+      <div class="field"><label>Confidence</label><input data-field="confidence" type="number" min="0" max="5" value="${Number(section.confidence) || 0}"></div>
+      <div class="field"><label>Done</label><input data-field="done" type="number" min="0" value="${done}"></div>
+      <div class="field"><label>Total</label><input data-field="total" type="number" min="0" value="${total}"></div>
+    </div>`;
+  }).join('');
+  document.getElementById('activationFields').innerHTML = Object.entries(currentState.activation).map(([key, value]) =>
+    `<label class="check"><input data-activation="${key}" type="checkbox"${value ? ' checked' : ''}>${esc(key.replaceAll('_', ' '))}</label>`).join('');
+}
+
+function readStateForm() {
+  const next = structuredClone(currentState);
+  next.readiness_level = Number(document.getElementById('readinessInput').value);
+  next.career_rto = document.getElementById('rtoInput').value.trim() || 'unknown';
+  next.next_action = document.getElementById('nextInput').value.trim();
+  const nextPrivateMeta = {
+    primary_lanes: document.getElementById('lanesInput').value
+      .split(/[,，]/).map(value => value.trim()).filter(Boolean),
+    current_bottleneck: document.getElementById('bottleneckInput').value.trim(),
+    biggest_unknown: document.getElementById('unknownInput').value.trim(),
+  };
+  for (const row of document.querySelectorAll('[data-section]')) {
+    const done = Math.max(0, Number(row.querySelector('[data-field="done"]').value) || 0);
+    const total = Math.max(done, Number(row.querySelector('[data-field="total"]').value) || 0);
+    next.sections[row.dataset.section] = {
+      status: row.querySelector('[data-field="status"]').value,
+      confidence: Math.max(0, Math.min(5, Number(row.querySelector('[data-field="confidence"]').value) || 0)),
+      dod: `${done}/${total}`,
+    };
+  }
+  for (const input of document.querySelectorAll('[data-activation]')) next.activation[input.dataset.activation] = input.checked;
+  next.enabled = Object.values(next.activation).every(Boolean);
+  return { state: next, privateMeta: nextPrivateMeta };
+}
+
+function milestonePayloads(before, after) {
+  const milestones = [];
+  if (after.readiness_level > before.readiness_level) {
+    milestones.push({ scope: 'readiness', from: before.readiness_level, to: after.readiness_level });
+  }
+  for (const [key, section] of Object.entries(after.sections)) {
+    const previous = before.sections?.[key]?.status || 'EMPTY';
+    if (STATUS_ORDER.indexOf(section.status) > STATUS_ORDER.indexOf(previous)) {
+      milestones.push({ scope: 'section', section: key, from: previous, to: section.status });
+    }
+  }
+  for (const [key, value] of Object.entries(after.activation)) {
+    if (value && !before.activation?.[key]) milestones.push({ scope: 'activation', criterion: key });
+  }
+  return milestones;
+}
+
+cardsEl.addEventListener('click', event => {
+  const card = event.target.closest('[data-key]');
+  if (card) openDetail(card.dataset.key);
+});
+cardsEl.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const card = event.target.closest('[data-key]');
+  if (card) { event.preventDefault(); openDetail(card.dataset.key); }
+});
+document.getElementById('toOverview').addEventListener('click', renderOverview);
+document.getElementById('editStateBtn').addEventListener('click', () => { fillStateForm(); showOnly(stateEditor); });
+document.getElementById('cancelStateBtn').addEventListener('click', renderOverview);
+document.getElementById('editDetailBtn').addEventListener('click', () => {
+  const meta = SECTION_META[currentSectionKey];
+  document.getElementById('detailEditorTitle').textContent = meta?.name || currentSectionKey;
+  document.getElementById('detailInput').value = privateSections[currentSectionKey] || '';
+  document.getElementById('detailSaveNote').textContent = '';
+  showOnly(detailEditor);
+});
+document.getElementById('cancelDetailBtn').addEventListener('click', () => openDetail(currentSectionKey));
+
+document.getElementById('stateForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('saveStateBtn');
+  const note = document.getElementById('stateSaveNote');
+  const before = structuredClone(currentState);
+  const formData = readStateForm();
+  const after = formData.state;
+  button.disabled = true;
+  note.textContent = 'Saving…';
+  try {
+    const savedPrivate = await savePanelPrivate(PANEL, {
+      schema_version: 1,
+      meta: formData.privateMeta,
+      sections: privateSections,
+    });
+    privateMeta = structuredClone(savedPrivate.content.meta || {});
+    privateSections = structuredClone(savedPrivate.content.sections || {});
+    privateLoaded = true;
+    const saved = await savePanelState(PANEL, after);
+    currentState = publicState(saved.state);
+    const milestones = milestonePayloads(before, currentState);
+    const results = await Promise.allSettled(milestones.map(payload => logEvent(PANEL, 'career_milestone', payload)));
+    const failed = results.filter(result => result.status === 'rejected').length;
+    const message = failed ? `状态已保存，${failed} 条里程碑写入失败。` : `已保存${milestones.length ? ` · ${milestones.length} 条里程碑` : ''}`;
+    renderOverview();
+    flash(message, failed > 0);
+  } catch (error) {
+    note.textContent = error.message || '保存失败。';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('saveDetailBtn').addEventListener('click', async () => {
+  const button = document.getElementById('saveDetailBtn');
+  const note = document.getElementById('detailSaveNote');
+  button.disabled = true;
+  note.textContent = 'Saving…';
+  try {
+    privateSections[currentSectionKey] = document.getElementById('detailInput').value;
+    const saved = await savePanelPrivate(PANEL, { schema_version: 1, meta: privateMeta, sections: privateSections });
+    privateSections = structuredClone(saved.content.sections || {});
+    privateLoaded = true;
+    await openDetail(currentSectionKey);
+    flash('Private detail saved.');
+  } catch (error) {
+    note.textContent = error.message || '保存失败。';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function setSession(session) {
+  owner = isOwner(session);
+  ownerState.textContent = owner ? 'Owner mode' : 'Public view';
+  loginLink.classList.toggle('hidden', owner);
+  editStateBtn.classList.toggle('hidden', !owner);
+  editDetailBtn.classList.toggle('hidden', !owner);
+  if (owner) {
+    privateLoaded = false;
+    try { await ensurePrivate(); } catch (error) { console.warn(error.message); }
+  } else {
+    privateSections = {};
+    privateMeta = {};
+    privateLoaded = false;
+    if (!detailEl.classList.contains('hidden') || !detailEditor.classList.contains('hidden')) renderOverview();
+  }
+}
+
+async function load() {
+  const response = await fetch('./career-turnaround.md', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) throw new Error('Career template 缺少 frontmatter');
+  const template = window.jsyaml.load(match[1]);
+  templateState = publicState(template);
+  templatePrivateMeta = {
+    primary_lanes: Array.isArray(template.primary_lanes) ? [...template.primary_lanes] : [],
+    current_bottleneck: template.current_bottleneck || '',
+    biggest_unknown: template.biggest_unknown || '',
+  };
+  templateSections = parseBodySections(text.slice(match[0].length));
+  currentState = templateState;
+
+  try {
+    const row = await queryPanelState(PANEL);
+    if (row?.state) currentState = publicState(row.state);
+  } catch (error) {
+    if (!panelError(error)) throw error;
+    console.warn('panel_states 尚未部署，使用公开模板摘要。');
+  }
+
+  await setSession(await getSession());
+  onAuthChange(session => setSession(session));
+  renderOverview();
+}
+
+load().catch(error => {
+  console.error(error);
+  statusEl.textContent = error.message || 'Failed to load.';
+  statusEl.classList.add('error');
+});
 </script>
 </body>
 </html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Owner · lab-play</title>
+<link rel="stylesheet" href="../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .shell {
+    max-width: var(--content-narrow);
+    margin: 0 auto;
+    padding: var(--sp-7) var(--sp-5) var(--sp-8);
+  }
+  .back {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+  }
+  .back:hover { color: var(--c-text); }
+  .card {
+    margin-top: var(--sp-7);
+    padding: var(--sp-6);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+  }
+  h1 {
+    margin: 0 0 var(--sp-3);
+    font-family: var(--font-serif);
+    font-size: var(--fs-xl);
+    letter-spacing: var(--ls-tight);
+  }
+  .hint, .status {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+  }
+  .form {
+    display: grid;
+    gap: var(--sp-3);
+    margin-top: var(--sp-5);
+  }
+  label {
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+  }
+  input {
+    width: 100%;
+    padding: var(--sp-3) var(--sp-4);
+    color: var(--c-text);
+    background: var(--c-bg);
+    border: 1px solid var(--c-line-strong);
+    border-radius: var(--radius-md);
+    font: inherit;
+  }
+  input:focus {
+    outline: 2px solid var(--c-accent-soft);
+    border-color: var(--c-accent);
+  }
+  button, .continue {
+    display: inline-flex;
+    justify-content: center;
+    padding: var(--sp-3) var(--sp-5);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--c-accent);
+    color: var(--c-surface);
+    font: inherit;
+    font-weight: var(--fw-medium);
+    transition: background var(--dur-base) var(--ease-out);
+  }
+  button:hover, .continue:hover { background: var(--c-accent-hover); }
+  button:disabled { cursor: default; opacity: 0.55; }
+  .secondary {
+    background: var(--c-surface-alt);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-line);
+  }
+  .secondary:hover { background: var(--c-bg); }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    margin-top: var(--sp-5);
+  }
+  .status { min-height: var(--sp-5); margin-top: var(--sp-4); }
+  .status.error { color: var(--c-negative); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main class="shell">
+  <a class="back" href="../">← Back</a>
+  <section class="card">
+    <h1>Owner</h1>
+
+    <div id="signedOut">
+      <p class="hint">使用预先授权的邮箱接收一次性登录链接。</p>
+      <form class="form" id="loginForm">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+        <button id="sendBtn" type="submit">Send magic link</button>
+      </form>
+    </div>
+
+    <div class="hidden" id="signedIn">
+      <p class="hint">已登录为 <span id="account"></span></p>
+      <div class="actions">
+        <a class="continue" id="continueLink" href="../">Continue</a>
+        <button class="secondary" id="signOutBtn" type="button">Sign out</button>
+      </div>
+    </div>
+
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </section>
+</main>
+
+<script type="module">
+import { getSession, isOwner, onAuthChange, sendMagicLink, signOut } from '../core/auth.js';
+
+const signedOut = document.getElementById('signedOut');
+const signedIn = document.getElementById('signedIn');
+const loginForm = document.getElementById('loginForm');
+const emailInput = document.getElementById('email');
+const sendBtn = document.getElementById('sendBtn');
+const signOutBtn = document.getElementById('signOutBtn');
+const account = document.getElementById('account');
+const statusEl = document.getElementById('status');
+const continueLink = document.getElementById('continueLink');
+
+function safeNext() {
+  const fallback = new URL('../', location.href);
+  const raw = new URLSearchParams(location.search).get('next');
+  if (!raw) return fallback.href;
+  const next = new URL(raw, location.href);
+  return next.origin === location.origin ? next.href : fallback.href;
+}
+
+const nextUrl = safeNext();
+continueLink.href = nextUrl;
+
+function setStatus(message, error = false) {
+  statusEl.textContent = message;
+  statusEl.classList.toggle('error', error);
+}
+
+function renderSession(session) {
+  const owner = isOwner(session);
+  signedOut.classList.toggle('hidden', Boolean(session));
+  signedIn.classList.toggle('hidden', !session);
+  continueLink.classList.toggle('hidden', !owner);
+  account.textContent = session?.user?.email || '';
+
+  if (session && !owner) {
+    setStatus('该账号没有 owner 权限。', true);
+  } else if (owner) {
+    setStatus('');
+  } else {
+    setStatus('');
+  }
+}
+
+loginForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  sendBtn.disabled = true;
+  setStatus('正在发送…');
+  try {
+    await sendMagicLink(emailInput.value.trim(), location.href);
+    setStatus('登录链接已发送，请检查邮箱。');
+  } catch (error) {
+    setStatus(error.message || '发送失败，请稍后重试。', true);
+  } finally {
+    sendBtn.disabled = false;
+  }
+});
+
+signOutBtn.addEventListener('click', async () => {
+  signOutBtn.disabled = true;
+  try {
+    await signOut();
+    renderSession(null);
+  } catch (error) {
+    setStatus(error.message || '退出失败，请稍后重试。', true);
+  } finally {
+    signOutBtn.disabled = false;
+  }
+});
+
+onAuthChange(session => renderSession(session));
+renderSession(await getSession());
+</script>
+</body>
+</html>

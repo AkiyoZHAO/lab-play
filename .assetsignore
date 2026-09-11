@@ -1,0 +1,17 @@
+/.git/**
+/.gitignore
+/.claude/**
+/.playwright-cli/**
+/.wrangler/**
+/db/**
+/.DS_Store
+/**/.DS_Store
+/.nojekyll
+/AGENTS.md
+/README.md
+/ROADMAP.md
+/design/DESIGN.md
+/plays/draw/README.md
+/panels/**/README.md
+/scripts/**
+/wrangler.jsonc

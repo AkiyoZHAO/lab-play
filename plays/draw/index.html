@@ -21,6 +21,16 @@
     transition: color var(--dur-fast) var(--ease-out);
   }
   .back:hover { color: var(--c-text); }
+  .auth-note {
+    margin: var(--sp-5) 0;
+    padding: var(--sp-3) var(--sp-4);
+    color: var(--c-text-muted);
+    background: var(--c-surface-alt);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+  }
+  .auth-note a { color: var(--c-accent); }
 
   /* 阶段切换：默认隐藏，加 .active 显示 */
   .stage { display: none; }
@@ -57,6 +67,11 @@
     transform: translateY(-4px);
     box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,0.3);
     border-color: var(--rar-glow);
+  }
+  .pool-card:disabled, .btn:disabled {
+    cursor: default;
+    opacity: 0.55;
+    transform: none;
   }
   /* 牌背纹样：矢量、用 --rar-ink 走线，稀有度越高越考究 */
   .pool-glyph {
@@ -220,6 +235,9 @@
 <body>
 <div class="shell">
   <a class="back" href="../../index.html">← 返回</a>
+  <div class="auth-note" id="authNote" hidden>
+    抽卡会写入私人时间线，请先 <a href="../../auth/?next=../plays/draw/">登录</a>。
+  </div>
 
   <!-- 阶段①：选池（2×2 牌背：全池子 / R / SR / SSR） -->
   <div class="stage active" id="stageTier">
@@ -267,6 +285,7 @@
 
 <script type="module">
 import { logEvent, updateEvent } from '../../core/events.js';
+import { getSession, isOwner, onAuthChange } from '../../core/auth.js';
 
 // ---------- 状态 ----------
 let tiers = [];          // 从 cards.json 读入的原始档位配置
@@ -275,6 +294,7 @@ let currentPool = null;  // 当前选中的池子对象 { id, label, isAll, acti
 let currentCard = null;  // 当前抽中的完整卡 { name, tier, duration }（贯穿写库/倒计时/反馈）
 let currentLogId = null; // 当前这一轮在 events 表里的记录 id（draw_pending）
 let countdownId = null;
+let canWrite = false;
 
 // localStorage：记录“进行中的一轮”，页面刷新/被杀后能恢复。
 // 沿用旧实现的 key 语义；card 存整张抽中卡（含 tier/duration），
@@ -335,6 +355,7 @@ const doneBtn = document.getElementById('doneBtn');
 const skipBtn = document.getElementById('skipBtn');
 const doneNote = document.getElementById('doneNote');
 const changeTier = document.getElementById('changeTier');
+const authNote = document.getElementById('authNote');
 
 frontGlyph.innerHTML = FRONT_GLYPH;
 
@@ -345,7 +366,19 @@ async function init() {
   pools = derivePools(tiers);
   renderPoolGrid();
   restoreInProgress(); // 若有未结束的一轮，恢复到抽卡阶段
+  setSession(await getSession());
 }
+
+function setSession(session) {
+  canWrite = isOwner(session);
+  authNote.hidden = canWrite;
+  poolGrid.querySelectorAll('.pool-card').forEach(button => { button.disabled = !canWrite; });
+  [drawBtn, redrawBtn, giveUpBtn, doneBtn, skipBtn].forEach(button => {
+    button.disabled = !canWrite;
+  });
+}
+
+onAuthChange(session => setSession(session));
 
 // 从原始档位派生 2×2 选池：
 // - 每档（R/SR/SSR）的活动都打上自己的 tier/duration。
@@ -380,6 +413,7 @@ function renderPoolGrid() {
 }
 
 function selectPool(poolId) {
+  if (!canWrite) return;
   currentPool = pools.find(p => p.id === poolId);
   if (!currentPool) return;
   tierTag.textContent = currentPool.isAll ? '全池子 · 混抽' : `${currentPool.label} · ${currentPool.desc}`;
@@ -433,7 +467,7 @@ function weightedPick(acts) {
 }
 
 drawBtn.addEventListener('click', () => {
-  if (!currentPool) return;
+  if (!canWrite || !currentPool) return;
   const acts = currentPool.activities;
   if (acts.length === 0) return;
 
@@ -460,23 +494,26 @@ drawBtn.addEventListener('click', () => {
 
 // 翻牌完成后：写 pending、存本地、起倒计时
 async function onDrawn() {
-  if (!currentCard) return;
+  if (!canWrite || !currentCard) return;
   const { name, tier, duration } = currentCard;
   resultLabel.textContent = `${tier} · ${duration} 分钟`;
   // 落一条 pending，即使中途关页面也不会丢这次抽卡的痕迹。
   const payload = { tier, activity: name, duration };
-  startTimer(duration);
-  // 倒计时进行中：显示重抽/放弃，隐藏底部换池链接（用 running-actions 里的按钮打断）
-  runningActions.classList.add('show');
-  changeTier.style.display = 'none';
-  localStorage.setItem(LS.card, JSON.stringify(currentCard));
-  localStorage.setItem(LS.pool, currentPool.id);
   try {
     const rec = await logEvent('draw', 'draw_pending', payload);
     currentLogId = rec.id;
     localStorage.setItem(LS.logId, rec.id);
+    localStorage.setItem(LS.card, JSON.stringify(currentCard));
+    localStorage.setItem(LS.pool, currentPool.id);
+    startTimer(duration);
+    // 倒计时进行中：显示重抽/放弃，隐藏底部换池链接（用 running-actions 里的按钮打断）
+    runningActions.classList.add('show');
+    changeTier.style.display = 'none';
   } catch (e) {
     console.error('写入 pending 失败', e);
+    doneNote.textContent = '写入失败，请确认登录状态后重试。';
+    drawBtn.style.display = 'inline-block';
+    changeTier.style.display = 'inline-block';
   }
 }
 
@@ -523,12 +560,16 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- 反馈：更新 pending 那条记录，而非新插一条 ----------
 async function feedbackDone(status) {
+  if (!canWrite) return;
   const finished = currentCard;
   const payload = { tier: finished?.tier, activity: finished?.name, duration: finished?.duration };
   try {
-    if (currentLogId) await updateEvent(currentLogId, { type: status, payload });
+    if (!currentLogId) throw new Error('缺少进行中的事件记录');
+    await updateEvent(currentLogId, { type: status, payload });
   } catch (e) {
     console.error('更新反馈失败', e);
+    doneNote.textContent = '反馈写入失败，请稍后重试。';
+    return;
   }
   clearInProgress();
   resetDrawStage();
@@ -541,6 +582,7 @@ skipBtn.addEventListener('click', () => feedbackDone('draw_skip'));
 
 changeTier.addEventListener('click', (e) => {
   e.preventDefault();
+  if (!canWrite) return;
   // 换池即打断当前这一轮：进行中的 pending 标记为 skip（打断 = 没做）。
   abortPendingAsSkip();
   clearInProgress();
@@ -550,6 +592,7 @@ changeTier.addEventListener('click', (e) => {
 
 // 重抽：打断当前轮（记 skip），留在本池立即再翻一张。
 redrawBtn.addEventListener('click', () => {
+  if (!canWrite) return;
   abortPendingAsSkip();
   clearInProgress();
   resetDrawStage();
@@ -558,6 +601,7 @@ redrawBtn.addEventListener('click', () => {
 
 // 放弃这轮：打断当前轮（记 skip），回到选池界面。
 giveUpBtn.addEventListener('click', () => {
+  if (!canWrite) return;
   abortPendingAsSkip();
   clearInProgress();
   resetDrawStage();
@@ -568,7 +612,7 @@ giveUpBtn.addEventListener('click', () => {
 // “进行中”的判据：有 currentLogId，且还没走到反馈（feedback 未显示）。
 // 一旦进入反馈阶段，skip 交给“没做”按钮，避免重复处理。
 function abortPendingAsSkip() {
-  if (!currentLogId) return;
+  if (!canWrite || !currentLogId) return;
   if (feedback.classList.contains('show')) return;
   const payload = { tier: currentCard?.tier, activity: currentCard?.name, duration: currentCard?.duration };
   const id = currentLogId;

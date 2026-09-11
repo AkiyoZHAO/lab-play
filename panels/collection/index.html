@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection · lab-play</title>
+<link rel="stylesheet" href="../../design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .shell { max-width: var(--content-max); margin: 0 auto; padding: var(--sp-7) var(--sp-5) var(--sp-8); }
+  .back { color: var(--c-text-muted); font-size: var(--fs-sm); transition: color var(--dur-fast) var(--ease-out); }
+  .back:hover { color: var(--c-text); }
+  .head { display: flex; justify-content: space-between; align-items: end; gap: var(--sp-5); margin: var(--sp-6) 0 var(--sp-7); }
+  h1 { margin: 0; font-family: var(--font-serif); font-size: var(--fs-xl); letter-spacing: var(--ls-tight); }
+  .summary { color: var(--c-text-muted); font-size: var(--fs-sm); }
+  .summary strong { color: var(--c-accent); font-family: var(--font-serif); font-size: var(--fs-xl); }
+  .status { padding: var(--sp-8) 0; color: var(--c-text-muted); font-size: var(--fs-sm); text-align: center; }
+  .status.error { color: var(--c-negative); }
+  .hidden { display: none; }
+  .tier { margin-bottom: var(--sp-8); }
+  .tier-head { display: flex; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+  .tier-name { font-size: var(--fs-xs); letter-spacing: var(--ls-wide); }
+  .tier-count { color: var(--c-text-faint); font-size: var(--fs-xs); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3); }
+  .card {
+    min-height: var(--sp-9);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: var(--sp-4);
+    color: var(--rar-ink);
+    background: var(--rar-surface);
+    border: 1px solid var(--rar-line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  .card[data-rar="R"] { --rar-surface: var(--rar-r-surface); --rar-line: var(--rar-r-line); --rar-ink: var(--rar-r-ink); }
+  .card[data-rar="SR"] { --rar-surface: var(--rar-sr-surface); --rar-line: var(--rar-sr-line); --rar-ink: var(--rar-sr-ink); }
+  .card[data-rar="SSR"] { --rar-surface: var(--rar-ssr-surface); --rar-line: var(--rar-ssr-line); --rar-ink: var(--rar-ssr-ink); }
+  .card.locked { --rar-surface: var(--c-surface-alt); --rar-line: var(--c-line); --rar-ink: var(--c-text-faint); }
+  .card-name { font-family: var(--font-serif); font-size: var(--fs-base); }
+  .card-meta { color: var(--rar-ink); font-size: var(--fs-xs); opacity: 0.72; }
+  .track { height: var(--sp-1); margin-top: var(--sp-3); overflow: hidden; background: var(--c-line); border-radius: var(--radius-full); }
+  .fill { height: 100%; background: var(--c-positive); border-radius: var(--radius-full); }
+  @media (max-width: 560px) {
+    .head { align-items: flex-start; }
+    .summary { text-align: right; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main class="shell">
+  <a class="back" data-anchor="back" href="../../index.html">← Back</a>
+  <header class="head">
+    <h1>Collection</h1>
+    <div class="summary"><strong id="unlocked">0</strong> / <span id="total">0</span> discovered</div>
+  </header>
+  <div class="status" id="status">Loading collection…</div>
+  <div class="hidden" id="collection"></div>
+</main>
+
+<script type="module">
+import { queryEvents } from '../../core/events.js';
+
+const statusEl = document.getElementById('status');
+const collectionEl = document.getElementById('collection');
+
+function esc(value) {
+  return String(value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function cardKey(tier, name) {
+  return `${tier}\u0000${name}`;
+}
+
+async function load() {
+  const [catalog, events] = await Promise.all([
+    fetch('../../plays/draw/cards.json', { cache: 'no-store' }).then(response => response.json()),
+    queryEvents({ play: 'draw', limit: 10000 }),
+  ]);
+  const counts = new Map();
+  for (const event of events) {
+    const tier = event.payload?.tier;
+    const name = event.payload?.activity;
+    if (!tier || !name) continue;
+    const key = cardKey(tier, name);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const tiers = catalog.tiers || [];
+  const total = tiers.reduce((sum, tier) => sum + tier.activities.length, 0);
+  let unlocked = 0;
+  collectionEl.innerHTML = tiers.map(tier => {
+    let tierUnlocked = 0;
+    const cards = tier.activities.map(activity => {
+      const count = counts.get(cardKey(tier.id, activity.name)) || 0;
+      if (count) { unlocked++; tierUnlocked++; }
+      return `<article class="card${count ? '' : ' locked'}" data-rar="${tier.id}">
+        <span class="card-name">${count ? esc(activity.name) : '未发现'}</span>
+        <span class="card-meta">${count ? `${count} encounter${count === 1 ? '' : 's'}` : `${tier.duration} min`}</span>
+      </article>`;
+    }).join('');
+    const percent = tier.activities.length ? tierUnlocked / tier.activities.length * 100 : 0;
+    return `<section class="tier" data-anchor="collection:${tier.id.toLowerCase()}">
+      <div class="tier-head"><span class="tier-name">${tier.label}</span><span class="tier-count">${tierUnlocked} / ${tier.activities.length}</span></div>
+      <div class="cards">${cards}</div>
+      <div class="track"><div class="fill" style="width:${percent}%"></div></div>
+    </section>`;
+  }).join('');
+  document.getElementById('unlocked').textContent = unlocked;
+  document.getElementById('total').textContent = total;
+  statusEl.classList.add('hidden');
+  collectionEl.classList.remove('hidden');
+}
+
+load().catch(error => {
+  console.error(error);
+  statusEl.textContent = 'Failed to load collection.';
+  statusEl.classList.add('error');
+});
+</script>
+</body>
+</html>

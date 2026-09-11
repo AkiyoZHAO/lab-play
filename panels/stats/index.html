@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>统计 · lab-play</title>
+<title>Dashboard · lab-play</title>
 <link rel="stylesheet" href="../../design/tokens.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
 <style>
-  /* 账本视图：把 events 聚合成可感知的证据。数字是主角，图表是注解。
+  /* 总览 Dashboard：widget 网格组织密度，把 events 聚合成可感知的证据。
+     首页保持薄；全貌、趋势、面板 readiness 与最近时间线集中在这里。
      配色只用中性阶 + positive/negative（见 DESIGN.md「图表」）。
      所有取值来自 design/tokens.css，本文件不写死颜色/间距/字号。 */
   .shell {
@@ -28,13 +30,21 @@
     letter-spacing: var(--ls-tight);
     margin: var(--sp-6) 0 var(--sp-5);
   }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: var(--sp-5);
+    margin: var(--sp-6) 0 var(--sp-5);
+  }
+  .head h1 { margin: 0; }
 
   /* 时间范围：胶囊筛选，选中态是本页唯一强调色焦点 */
   .range {
     display: flex;
     flex-wrap: wrap;
     gap: var(--sp-2);
-    margin-bottom: var(--sp-7);
+    margin: 0;
   }
   .range button {
     background: var(--c-surface);
@@ -57,18 +67,39 @@
   .status {
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
-    padding: var(--sp-8) 0;
-    text-align: center;
+    padding: var(--sp-3) 0 var(--sp-5);
+    text-align: left;
   }
   .status.error { color: var(--c-negative); }
   .hidden { display: none; }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: var(--sp-4);
+  }
+  .widget {
+    min-width: 0;
+    padding: var(--sp-5);
+    background: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  .widget-kpis { grid-column: span 8; }
+  .widget-career { grid-column: span 4; }
+  .widget-trend { grid-column: span 8; }
+  .widget-month { grid-column: span 4; }
+  .widget-acts { grid-column: span 5; }
+  .widget-log { grid-column: span 7; }
+  .widget-log.wide { grid-column: span 12; }
 
   /* KPI：四个大数字并排，完成数用强调色，其余保持中性 */
   .kpis {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--sp-5);
-    margin-bottom: var(--sp-8);
+    margin-bottom: var(--sp-5);
   }
   .kpi-value {
     font-family: var(--font-serif);
@@ -90,7 +121,7 @@
     color: var(--c-text-faint);
   }
 
-  .section { margin-bottom: var(--sp-8); }
+  .section { margin: 0; }
   .section-label {
     font-size: var(--fs-xs);
     letter-spacing: var(--ls-wide);
@@ -218,7 +249,63 @@
   .log-name { min-width: 0; }
   .log-meta { color: var(--c-text-faint); font-size: var(--fs-xs); }
 
+  .career-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sp-3);
+  }
+  .career-level {
+    font-family: var(--font-serif);
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    line-height: var(--lh-tight);
+  }
+  .career-rto { color: var(--c-text-muted); font-size: var(--fs-xs); }
+  .career-track {
+    height: var(--sp-2);
+    margin: var(--sp-4) 0;
+    overflow: hidden;
+    background: var(--c-surface-alt);
+    border-radius: var(--radius-full);
+  }
+  .career-fill {
+    height: 100%;
+    background: var(--c-positive);
+    border-radius: var(--radius-full);
+  }
+  .career-next { color: var(--c-text-muted); font-size: var(--fs-sm); }
+
+  .calendar-head, .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--sp-1);
+  }
+  .calendar-head {
+    margin-bottom: var(--sp-2);
+    color: var(--c-text-faint);
+    font-size: var(--fs-xs);
+    text-align: center;
+  }
+  .calendar-day {
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    color: var(--c-text-faint);
+    background: var(--c-bg);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+  }
+  .calendar-day.has-event { color: var(--c-accent); background: var(--c-accent-soft); }
+  .calendar-day.active { color: var(--c-surface); background: var(--c-positive); }
+  .calendar-day.blank { visibility: hidden; }
+
   @media (max-width: 720px) {
+    .head { display: block; }
+    .head .range { margin-top: var(--sp-4); }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .widget-kpis, .widget-career, .widget-trend,
+    .widget-month, .widget-acts, .widget-log, .widget-log.wide { grid-column: auto; }
     .kpis { grid-template-columns: repeat(2, 1fr); gap: var(--sp-6) var(--sp-4); }
     .log li { grid-template-columns: var(--sp-8) var(--sp-7) 1fr; }
     .log-meta { display: none; }
@@ -228,56 +315,73 @@
 <body>
 <div class="shell">
   <a class="back" href="../../index.html">← 返回主菜单</a>
-  <h1>统计</h1>
-
-  <div class="range" id="range">
-    <button type="button" data-range="7" class="active">最近 7 天</button>
-    <button type="button" data-range="30">最近 30 天</button>
-    <button type="button" data-range="all">全部</button>
+  <div class="head">
+    <h1>Dashboard</h1>
+    <div class="range" id="range">
+      <button type="button" data-range="7" class="active">7 天</button>
+      <button type="button" data-range="30">30 天</button>
+      <button type="button" data-range="all">全部</button>
+    </div>
   </div>
 
-  <div class="status" id="status">读取账本…</div>
+  <div class="status" id="status">读取时间线…</div>
 
-  <div id="board" class="hidden">
-    <div class="kpis">
-      <div>
-        <div class="kpi-value accent" id="kpiDone">0</div>
-        <div class="kpi-label">完成</div>
-        <div class="kpi-hint" id="kpiTotal"></div>
+  <div id="board" class="dashboard-grid hidden">
+    <section class="widget widget-kpis">
+      <div class="section-label">Play summary</div>
+      <div class="kpis">
+        <div>
+          <div class="kpi-value accent" id="kpiDone">0</div>
+          <div class="kpi-label">完成</div>
+          <div class="kpi-hint" id="kpiTotal"></div>
+        </div>
+        <div>
+          <div class="kpi-value" id="kpiSkip">0</div>
+          <div class="kpi-label">跳过</div>
+        </div>
+        <div>
+          <div class="kpi-value" id="kpiRate">—</div>
+          <div class="kpi-label">完成率</div>
+          <div class="kpi-hint" id="kpiResolved"></div>
+        </div>
+        <div>
+          <div class="kpi-value" id="kpiTokens">0</div>
+          <div class="kpi-label">时间代币</div>
+          <div class="kpi-hint">完成分钟累计</div>
+        </div>
       </div>
-      <div>
-        <div class="kpi-value" id="kpiSkip">0</div>
-        <div class="kpi-label">跳过</div>
-      </div>
-      <div>
-        <div class="kpi-value" id="kpiRate">—</div>
-        <div class="kpi-label">完成率</div>
-        <div class="kpi-hint" id="kpiResolved"></div>
-      </div>
-      <div>
-        <div class="kpi-value" id="kpiTokens">0</div>
-        <div class="kpi-label">时间代币</div>
-        <div class="kpi-hint">完成分钟累计</div>
-      </div>
-    </div>
-
-    <section class="section">
       <div class="section-label">完成占比</div>
       <div class="ratio" id="ratio"></div>
       <div class="legend" id="legend"></div>
     </section>
 
-    <section class="section">
+    <section class="widget widget-career">
+      <div class="section-label">Career readiness</div>
+      <div class="career-top">
+        <div class="career-level" id="careerLevel">—</div>
+        <div class="career-rto" id="careerRto">RTO —</div>
+      </div>
+      <div class="career-track"><div class="career-fill" id="careerFill"></div></div>
+      <div class="career-next" id="careerNext">读取面板状态…</div>
+    </section>
+
+    <section class="widget widget-trend">
       <div class="section-label" id="trendLabel">每日痕迹</div>
       <div class="chart" id="chart"></div>
     </section>
 
-    <section class="section" id="actsSection">
+    <section class="widget widget-month">
+      <div class="section-label" id="monthLabel">本月</div>
+      <div class="calendar-head"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+      <div class="calendar-grid" id="calendar"></div>
+    </section>
+
+    <section class="widget widget-acts" id="actsSection">
       <div class="section-label">活动</div>
       <div id="acts"></div>
     </section>
 
-    <section class="section" id="logSection">
+    <section class="widget widget-log" id="logSection">
       <div class="section-label">最近痕迹</div>
       <ul class="log" id="log"></ul>
     </section>
@@ -286,11 +390,18 @@
 
 <script type="module">
 import { queryEvents } from '../../core/events.js';
+import { queryPanelState } from '../../core/panels.js';
 
 const TYPE_DONE = 'draw_done';
 const TYPE_SKIP = 'draw_skip';
 const TYPE_PENDING = 'draw_pending';
-const TYPE_LABEL = { [TYPE_DONE]: '完成', [TYPE_SKIP]: '跳过', [TYPE_PENDING]: '进行中' };
+const TYPE_MILESTONE = 'career_milestone';
+const TYPE_LABEL = {
+  [TYPE_DONE]: '完成',
+  [TYPE_SKIP]: '跳过',
+  [TYPE_PENDING]: '进行中',
+  [TYPE_MILESTONE]: '里程碑',
+};
 const LOG_CAP = 20;
 
 function esc(s) {
@@ -307,6 +418,7 @@ const rangeEl = document.getElementById('range');
 
 let allEvents = [];
 let currentRange = '7';
+let careerState = null;
 
 rangeEl.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-range]');
@@ -395,7 +507,7 @@ function trendBuckets(events, from, to) {
 }
 
 function aggregate(events, from, to) {
-  const filtered = events.filter(ev => inRange(ev, from, to));
+  const filtered = events.filter(ev => ev.play === 'draw' && inRange(ev, from, to));
   const done = filtered.filter(e => e.type === TYPE_DONE);
   const skip = filtered.filter(e => e.type === TYPE_SKIP);
   const pending = filtered.filter(e => e.type === TYPE_PENDING);
@@ -423,25 +535,72 @@ function aggregate(events, from, to) {
   return { filtered, done, skip, pending, resolved, tokens, ranking };
 }
 
-function render() {
-  if (!allEvents.length) {
-    statusEl.textContent = '这段时间还没有痕迹。';
-    statusEl.classList.remove('error', 'hidden');
-    boardEl.classList.add('hidden');
-    return;
+function renderCalendar(events, now = new Date()) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const days = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+  const counts = new Map();
+  for (const event of events) {
+    const date = new Date(event.created_at);
+    if (date.getFullYear() !== year || date.getMonth() !== month) continue;
+    const day = date.getDate();
+    counts.set(day, (counts.get(day) || 0) + 1);
   }
 
+  document.getElementById('monthLabel').textContent = `${year}.${String(month + 1).padStart(2, '0')}`;
+  const cells = Array.from({ length: firstWeekday }, () => '<span class="calendar-day blank"></span>');
+  for (let day = 1; day <= days; day++) {
+    const count = counts.get(day) || 0;
+    const cls = count > 1 ? ' active' : count ? ' has-event' : '';
+    cells.push(`<span class="calendar-day${cls}" title="${count} 条事件">${day}</span>`);
+  }
+  document.getElementById('calendar').innerHTML = cells.join('');
+}
+
+function renderCareer(state) {
+  const level = Number(state?.readiness_level) || 0;
+  document.getElementById('careerLevel').textContent = `L${level}`;
+  document.getElementById('careerFill').style.width = `${Math.min(100, Math.max(0, level / 5 * 100))}%`;
+  document.getElementById('careerRto').textContent = `RTO ${state?.career_rto || 'unknown'}`;
+  document.getElementById('careerNext').textContent = state?.next_action || '尚未设置下一步。';
+}
+
+async function loadCareerState() {
+  try {
+    const row = await queryPanelState('career');
+    if (row?.state) {
+      careerState = row.state;
+      renderCareer(careerState);
+      return;
+    }
+  } catch (error) {
+    if (error?.code !== 'PGRST205' && !/panel_states/.test(error?.message || '')) {
+      console.error('读取 Career 摘要失败', error);
+    }
+  }
+
+  try {
+    const response = await fetch('../career/career-turnaround.md', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    careerState = match ? window.jsyaml.load(match[1]) : null;
+  } catch (error) {
+    console.error('读取 Career 状态失败', error);
+    careerState = null;
+  }
+  renderCareer(careerState);
+}
+
+function render() {
   const { from, to } = rangeBounds(currentRange);
   const stats = aggregate(allEvents, from, to);
+  const timeline = allEvents.filter(event => inRange(event, from, to));
 
-  if (!stats.filtered.length) {
-    statusEl.textContent = '这段时间还没有痕迹。';
-    statusEl.classList.remove('error', 'hidden');
-    boardEl.classList.add('hidden');
-    return;
-  }
-
-  statusEl.classList.add('hidden');
+  statusEl.classList.toggle('hidden', timeline.length > 0);
+  statusEl.textContent = timeline.length ? '' : '这段时间还没有痕迹，其他面板状态仍可查看。';
+  statusEl.classList.remove('error');
   boardEl.classList.remove('hidden');
 
   document.getElementById('kpiDone').textContent = String(stats.done.length);
@@ -457,9 +616,9 @@ function render() {
   const total = stats.filtered.length;
   const ratio = document.getElementById('ratio');
   ratio.innerHTML =
-    `<span class="done" style="width:${(stats.done.length / total) * 100}%"></span>` +
-    `<span class="skip" style="width:${(stats.skip.length / total) * 100}%"></span>` +
-    `<span class="pending" style="width:${(stats.pending.length / total) * 100}%"></span>`;
+    `<span class="done" style="width:${total ? (stats.done.length / total) * 100 : 0}%"></span>` +
+    `<span class="skip" style="width:${total ? (stats.skip.length / total) * 100 : 0}%"></span>` +
+    `<span class="pending" style="width:${total ? (stats.pending.length / total) * 100 : 0}%"></span>`;
   document.getElementById('legend').innerHTML =
     `<span><i class="dot-done"></i>完成 ${stats.done.length}</span>` +
     `<span><i class="dot-skip"></i>跳过 ${stats.skip.length}</span>` +
@@ -485,10 +644,13 @@ function render() {
   }).join('');
 
   const actsSection = document.getElementById('actsSection');
+  const logSection = document.getElementById('logSection');
   if (!stats.ranking.length) {
     actsSection.classList.add('hidden');
+    logSection.classList.add('wide');
   } else {
     actsSection.classList.remove('hidden');
+    logSection.classList.remove('wide');
     document.getElementById('acts').innerHTML = stats.ranking.map(a => {
       const settled = a.done + a.skip;
       const pct = settled ? (a.done / settled) * 100 : 0;
@@ -507,13 +669,17 @@ function render() {
     }).join('');
   }
 
-  const recent = [...stats.filtered].reverse().slice(0, LOG_CAP);
+  const recent = [...timeline].reverse().slice(0, LOG_CAP);
   document.getElementById('log').innerHTML = recent.map(e => {
     const d = new Date(e.created_at);
     const time = `${md(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     const k = kind(e.type);
-    const activity = e.payload?.activity || '—';
-    const meta = [e.payload?.tier, e.type === TYPE_DONE && e.payload?.duration ? `${e.payload.duration} 代币` : '']
+    const activity = e.type === TYPE_MILESTONE
+      ? (e.payload?.section || e.payload?.criterion || 'Career readiness').replaceAll('_', ' ')
+      : e.payload?.activity || '—';
+    const meta = e.type === TYPE_MILESTONE
+      ? [e.payload?.from, e.payload?.to].filter(value => value !== undefined).join(' → ')
+      : [e.payload?.tier, e.type === TYPE_DONE && e.payload?.duration ? `${e.payload.duration} 代币` : '']
       .filter(Boolean).join(' · ');
     return `<li>
       <span class="log-time">${time}</span>
@@ -522,10 +688,14 @@ function render() {
       <span class="log-meta">${meta}</span>
     </li>`;
   }).join('');
+  renderCalendar(allEvents);
 }
 
 try {
-  allEvents = await queryEvents({ limit: 10000 });
+  [allEvents] = await Promise.all([
+    queryEvents({ limit: 10000 }),
+    loadCareerState(),
+  ]);
   render();
 } catch (err) {
   console.error(err);

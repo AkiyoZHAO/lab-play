@@ -6,17 +6,17 @@
       "desc": "决策疲劳时，随机抽一件“有点意思但不想设为每日任务”的事来做。",
       "icon": "◈",
       "path": "plays/draw/",
-      "status": "wip"
+      "status": "active"
     }
   ],
   "panels": [
     {
-      "id": "stats",
-      "name": "Stats",
-      "desc": "所有玩法留下的痕迹汇总——看看这段时间其实做了什么。",
+      "id": "dashboard",
+      "name": "Dashboard",
+      "desc": "事件、趋势与各面板 readiness 的高密度总览。",
       "icon": "▤",
       "path": "panels/stats/",
-      "status": "wip"
+      "status": "active"
     },
     {
       "id": "career",
@@ -24,7 +24,15 @@
       "desc": "把“随时转身”做成一个有等级、能测量的可维护 skill。",
       "icon": "◨",
       "path": "panels/career/",
-      "status": "wip"
+      "status": "active"
+    },
+    {
+      "id": "collection",
+      "name": "Collection",
+      "desc": "从共享时间线点亮抽到过的卡牌。",
+      "icon": "◇",
+      "path": "panels/collection/",
+      "status": "active"
     }
   ]
 }

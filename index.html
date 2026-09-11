@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>lab-play</title>
 <link rel="stylesheet" href="design/tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   /* 主菜单：字少图多。删掉所有说明文字，只留 SVG 纹样 + 名字 + 大留白。
      这是个人游戏系统，玩家只有自己，不需要说明。
@@ -27,6 +28,54 @@
     letter-spacing: var(--ls-tight);
     margin: 0;
   }
+  .owner-link {
+    display: inline-block;
+    margin-top: var(--sp-3);
+    color: var(--c-text-faint);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .owner-link:hover { color: var(--c-accent); }
+
+  .self-glance {
+    max-width: var(--content-narrow);
+    margin: 0 auto var(--sp-8);
+  }
+  .glance-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--sp-3);
+    color: var(--c-text-faint);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+  }
+  .glance-head a { transition: color var(--dur-fast) var(--ease-out); }
+  .glance-head a:hover { color: var(--c-accent); }
+  .week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--sp-2);
+  }
+  .day {
+    display: grid;
+    place-items: center;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-1);
+    color: var(--c-text-faint);
+    border-bottom: 1px solid var(--c-line);
+    font-size: var(--fs-xs);
+  }
+  .day.today { color: var(--c-accent); border-color: var(--c-accent); }
+  .day-mark {
+    width: var(--sp-1);
+    height: var(--sp-1);
+    background: transparent;
+    border-radius: var(--radius-full);
+  }
+  .day.has-event .day-mark { background: var(--c-positive); }
 
   /* 区块标签：极小、宽字距，作为分区而非解释 */
   .section-label {
@@ -86,7 +135,16 @@
 <div class="shell">
   <header class="masthead">
     <h1>lab · play</h1>
+    <a class="owner-link" href="auth/">Owner</a>
   </header>
+
+  <section class="self-glance" data-anchor="self-glance">
+    <div class="glance-head">
+      <span>This week</span>
+      <a href="panels/stats/">Dashboard</a>
+    </div>
+    <div class="week" id="week"></div>
+  </section>
 
   <div class="section-label">Plays</div>
   <div class="grid" id="playsGrid"></div>
@@ -96,70 +154,73 @@
 </div>
 
 <script type="module">
+import { queryEvents } from './core/events.js';
+import { resolveHomeAnchor } from './skins/default.js';
+
 // 主菜单由 plays.json 清单驱动：新增一个 play 只需在 plays.json 加一行，
 // 这里自动渲染出入口，无需改动本文件。（见 AGENTS.md「如何新增一个 play」）
 //
 // 字少图多：每个入口只渲染 SVG 纹样 + 名字，不再渲染 desc / 状态标签。
-// 图形按 id 从内置的抽象几何纹样里取；没有对应纹样时回退到通用菱形。
+// 图形按 anchor 从当前皮肤映射里取；没有对应纹样时回退到通用菱形。
 // 纹样风格与卡牌世界观一致（菱形/牌形/线条构成），随主题色，非具象工具图标。
-const GLYPHS = {
-  // 抽卡：一叠错落的牌，暗示“从牌堆抽一张”
-  draw: `
-    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
-         stroke-width="1.4" stroke-linejoin="round">
-      <rect x="9"  y="14" width="20" height="28" rx="3"
-            transform="rotate(-9 19 28)"/>
-      <rect x="19" y="12" width="20" height="28" rx="3"
-            transform="rotate(6 29 26)"/>
-      <path d="M29 20 l3.2 6.2 6.8 1 -5 4.7 1.2 6.8 -6.2-3.2 -6.2 3.2 1.2-6.8 -5-4.7 6.8-1 z"
-            stroke-width="1.1"/>
-    </svg>`,
-  // 统计：账本视图，用高低不一的竖线暗示“痕迹汇总”
-  stats: `
-    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
-         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 40 h32"/>
-      <path d="M14 40 V26"/>
-      <path d="M22 40 V16"/>
-      <path d="M30 40 V22"/>
-      <path d="M38 40 V12"/>
-      <path d="M14 26 l8-10 8 6 8-10" stroke-width="1.1"/>
-    </svg>`,
-  // 事业：一条上升后转向的路径 + 箭头，暗示“随时转身”
-  career: `
-    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
-         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 40 V22 a6 6 0 0 1 6-6 h12"/>
-      <path d="M28 10 l7 6 -7 6" stroke-width="1.1"/>
-      <circle cx="12" cy="40" r="1.7" fill="currentColor" stroke="none"/>
-    </svg>`,
-};
-
-// 通用回退纹样：一个带内框的菱形牌形，保证未知 id 也有雅致图形
-const GLYPH_FALLBACK = `
-  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
-       stroke-width="1.4" stroke-linejoin="round">
-    <path d="M24 5 43 24 24 43 5 24 z"/>
-    <path d="M24 13 35 24 24 35 13 24 z" stroke-width="1.1"/>
-  </svg>`;
-
 async function render() {
   const data = await fetch('plays.json', { cache: 'no-store' }).then(r => r.json());
-  fill('playsGrid', data.plays || []);
-  fill('panelsGrid', data.panels || []);
+  fill('playsGrid', data.plays || [], 'play');
+  fill('panelsGrid', data.panels || [], 'panel');
 }
 
-function fill(gridId, items) {
+function fill(gridId, items, kind) {
   const grid = document.getElementById(gridId);
-  grid.innerHTML = items.map(it => `
-    <a class="entry" href="${it.path}">
-      <span class="entry-glyph">${GLYPHS[it.id] || GLYPH_FALLBACK}</span>
+  grid.innerHTML = items.map(it => {
+    const anchor = it.id === 'dashboard' ? 'dashboard' : `${kind}:${it.id}`;
+    const visual = resolveHomeAnchor(anchor);
+    return `
+    <a class="entry" data-anchor="${anchor}" href="${it.path}">
+      <span class="entry-glyph">${visual.glyph}</span>
       <span class="entry-name">${it.name}</span>
-    </a>
-  `).join('');
+    </a>`;
+  }).join('');
+}
+
+function startOfWeek(now = new Date()) {
+  const start = new Date(now);
+  const offset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - offset);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function dayKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+async function renderSelfGlance() {
+  const start = startOfWeek();
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  const events = await queryEvents({ from: start.toISOString(), to: end.toISOString() });
+  const counts = new Map();
+  for (const event of events) {
+    const key = dayKey(new Date(event.created_at));
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const today = dayKey(new Date());
+  const names = ['一', '二', '三', '四', '五', '六', '日'];
+  document.getElementById('week').innerHTML = names.map((name, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const count = counts.get(dayKey(date)) || 0;
+    const classes = ['day', count ? 'has-event' : '', dayKey(date) === today ? 'today' : ''].filter(Boolean).join(' ');
+    return `<span class="${classes}" title="${count} 条事件"><span>${name}</span><span>${date.getDate()}</span><i class="day-mark"></i></span>`;
+  }).join('');
 }
 
 render();
+renderSelfGlance().catch(error => {
+  console.error('读取 self-glance 失败', error);
+  document.querySelector('[data-anchor="self-glance"]').hidden = true;
+});
 </script>
 
 </body>

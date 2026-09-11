@@ -22,17 +22,23 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 
 ## TODO
 
-- [ ] 账号与权限地基:Supabase Auth(magic link,仅我)+ events RLS 改「anon 只读 / 仅我可写」+ 前端登录(抽卡等写操作登录后可用)—— show 给朋友前必做
-- [ ] 分层隐私 + career 细节迁库:敏感细节存 Supabase 私有表(RLS 仅我可读),下钻「登录才看」—— 填敏感内容前做
-- [ ] 挂上 akiyolab.com(CF Pages 接仓库 + 自定义域,替换现落地页)
-- [ ] 统计 → 高密度「总览 Dashboard」(widget 网格)
-- [ ] 事业面板:里程碑写 events / 网页内编辑
-- [ ] 皮肤层:anchor→皮肤绑定 + 兜底
-- [ ] 首页 `self-glance`(如小月历)
-- [ ] 图鉴、外部打卡接入(远)
+- [x] 账号与权限地基:Supabase Auth(magic link,仅我)+ events RLS「anon 只读 / 仅 Owner 可写」+ 前端登录门禁
+- [x] 分层隐私 + career 细节迁库:公开 `panel_states` + Owner-only `panel_private`;下钻登录才看
+- [x] 挂上 akiyolab.com:复用 Cloudflare Worker Static Assets + custom domain,替换旧落地页
+- [x] 统计 → 高密度「总览 Dashboard」(widget 网格)
+- [x] 事业面板:里程碑写 events / 网页内编辑
+- [x] 皮肤层:anchor→皮肤绑定 + 兜底
+- [x] 首页 `self-glance`(周视图)
+- [x] 图鉴:按共享 events 解锁卡牌与统计 encounters
+- [ ] 外部打卡接入(远):待确定具体数据源;只接受自动同步,不做手工搬运
 
-已接:首页(玩法/面板两栏)· 抽卡 · 统计 · 事业面板(概览 + 子线下钻详情)。
+已接:首页(玩法/面板两栏 + self-glance + 默认皮肤)· 抽卡 · Dashboard · 事业面板(概览 + 私有下钻/编辑)· 图鉴。
 
 ## 决策日志
 
 - **2026-09-10** 小游戏 → 个人空间;events 升级为共享时间线;内容分玩法/面板;anchor 接口与皮肤分离;首页简约 / Dashboard 高密度;事业面板走文档态(frontmatter 承载状态,方案 B)。
+- **2026-09-11** 首页改为 anchor→默认皮肤映射并提供未知 anchor 兜底;加入 self-glance 周视图;统计升级为 widget Dashboard,聚合 events、月历与 Career readiness。
+- **2026-09-11** Career 数据分层为公开 `panel_states` 摘要与 Owner-only `panel_private` 正文;网页内可编辑,状态升级写 `career_milestone`;公开 md 降为无敏感信息的初始模板。
+- **2026-09-11** `akiyolab.com` 已有 Worker Static Assets 与 custom domain,不重复创建 Pages 项目;部署配置迁入本仓库,待权限地基上线后覆盖旧落地页。
+- **2026-09-11** Supabase 创建唯一 Owner 用户,关闭公开注册,配置正式/预览/本地回跳 URL;events 与 Career 表 RLS 已做 anon 拒写 + Owner 事务试写验证。
+- **2026-09-11** `akiyolab.com` 正式发布 lab-play;线上功能页与匿名门禁通过浏览器回归,仓库元数据/SQL/验收脚本不进入静态资产。

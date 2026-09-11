@@ -1,9 +1,9 @@
 -- =============================================================
 -- lab-play · events 表 schema（Supabase / Postgres）
 -- -------------------------------------------------------------
--- 这是整个游戏系统的“唯一真相源”（single source of truth）。
--- 所有 play 产生的行为都统一写成一条 event；统计 / 图鉴 / 回顾
--- 都只是对这张表的读视图，不单独存状态、不新增业务表。
+-- events 是整个个人空间的共享时间线：玩法行动、面板里程碑统一写入；
+-- 统计 / 图鉴 / 回顾是它的读视图。面板当前状态可由面板自己持有，
+-- 不要求从 events 完整重建。
 --
 -- 设计原则（见 lab-play-system-design.md）：
 --   · 单向流水账：只记录“发生了什么”，不做双向货币 / 消费出口。
@@ -31,26 +31,77 @@ create index events_created_at_idx on events (created_at);
 -- =============================================================
 -- 行级安全策略（RLS）
 -- -------------------------------------------------------------
--- Supabase 默认要求开 RLS，否则前端读写会被拒。因为这是私人小工具、
--- 没有账号系统，用最简单的开放策略：允许匿名（anon）读 / 写 / 改。
--- anon key 是设计成可公开的，安全边界靠这里的策略控制。
+-- 所有人可读，只有 JWT app_metadata.role = owner 的账号可写。
+-- owner claim 的配置步骤见 db/README.md；anon key 可公开，安全边界在 RLS。
 -- =============================================================
 
 alter table events enable row level security;
 
-create policy "允许插入" on events
-  for insert to anon
-  with check (true);
-
-create policy "允许读取" on events
-  for select to anon
+create policy "公开读取" on events
+  for select to anon, authenticated
   using (true);
 
--- 抽卡两段式：先插入 draw_pending，反馈时再更新为 draw_done / draw_skip
-create policy "允许更新" on events
-  for update to anon
-  using (true)
-  with check (true);
+create policy "仅 owner 插入" on events
+  for insert to authenticated
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+-- 抽卡两段式：先插入 draw_pending，反馈时再更新为 draw_done / draw_skip。
+create policy "仅 owner 更新" on events
+  for update to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner')
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+-- =============================================================
+-- 面板状态
+-- -------------------------------------------------------------
+-- panel_states 只放可公开展示的摘要；panel_private 放敏感正文。
+-- 两者都是面板当前状态，不由 events 重建。
+-- =============================================================
+
+create table panel_states (
+  panel       text primary key,
+  state       jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+create table panel_private (
+  panel       text primary key,
+  content     jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+alter table panel_states enable row level security;
+alter table panel_private enable row level security;
+
+grant select on panel_states to anon, authenticated;
+grant insert, update on panel_states to authenticated;
+grant select, insert, update on panel_private to authenticated;
+
+create policy "公开读取面板摘要" on panel_states
+  for select to anon, authenticated
+  using (true);
+
+create policy "仅 owner 新增面板摘要" on panel_states
+  for insert to authenticated
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+create policy "仅 owner 更新面板摘要" on panel_states
+  for update to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner')
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+create policy "仅 owner 读取私有面板" on panel_private
+  for select to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+create policy "仅 owner 新增私有面板" on panel_private
+  for insert to authenticated
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
+
+create policy "仅 owner 更新私有面板" on panel_private
+  for update to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner')
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'owner');
 
 -- =============================================================
 -- payload 约定（示例，非数据库强约束，由前端 core/events.js 保证）
@@ -63,4 +114,9 @@ create policy "允许更新" on events
 --
 -- 两段式流程：抽中瞬间写一条 draw_pending，用户反馈后
 -- 把这条记录的 type 更新为 draw_done / draw_skip。
+--
+-- Career panel（play = 'career'）：
+--   type = 'career_milestone'
+--   payload 例：{ "scope": "section", "section": "market_map",
+--                 "from": "EMPTY", "to": "MAPPED" }
 -- =============================================================

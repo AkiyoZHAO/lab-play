@@ -56,11 +56,11 @@ lab-play 是一个自己拥有的**个人空间**，承载人生系统。内容�
 
 1. 在 `panels/<name>/` 建目录，放 `index.html`（+ 可选 `README.md`）。可参考已有的 `panels/stats/`、`panels/career/`。
 2. 数据来源二选一：
-   - **自持状态型**（如事业）：状态存面板自己的文件（先 Markdown 文档态），页面做只读渲染 + 进度可视化；**里程碑**通过 events.js emit 一条事件。
+   - **自持状态型**（如事业）：公开摘要与私有正文由面板自己的数据入口维护（事业现用 `panel_states` / `panel_private`，公开 Markdown 仅作空白模板与 fallback）；**里程碑**通过 events.js emit 一条事件。
    - **聚合型**（如总览 Dashboard、统计）：`queryEvents` 读 events 聚合，只读、不自存状态。
 3. 在 `plays.json` 加一条清单。
 
-> 「账本视图」已并入「面板」：统计在 `panels/stats/`、事业在 `panels/career/`；`plays.json` 用 `plays[]` + `panels[]` 两个数组。`panels/stats/` 升级为高密度「总览 Dashboard」仍是待办。
+> 「账本视图」已并入「面板」：Dashboard 在 `panels/stats/`、事业在 `panels/career/`、图鉴在 `panels/collection/`；`plays.json` 用 `plays[]` + `panels[]` 两个数组。
 
 ---
 
@@ -75,6 +75,6 @@ lab-play 是一个自己拥有的**个人空间**，承载人生系统。内容�
 ## 六、技术与代码风格
 
 - 前端：**纯静态、原生 ES module、零构建、零打包器**。不引框架、不加构建步骤（这本身是「极简」原则的一部分）。
-- **别删仓库根的 `.nojekyll`**：它关掉 GitHub Pages 的 Jekyll，让 `.md` 等文件按原样提供。走 `.md` 文档态的面板（如事业）靠 `fetch` 读原始 md，删了它公网会 404（本地静态服务器不受影响，坑很隐蔽）。
+- **别删仓库根的 `.nojekyll`**：它关掉 GitHub Pages 的 Jekyll，让 `.md` 等文件按原样提供。事业面板仍会 `fetch` 公开 Markdown 模板作初始值 / fallback，删了它公网会 404（本地静态服务器不受影响，坑很隐蔽）。
 - 承接全局 CLAUDE.md 的纪律：动手前说清计划、复杂改动先确认；只改与任务相关的代码，不顺手重构无关部分；不删有效注释；修 bug 先定位根因，不用 try/catch 或改配置掩盖问题；不确定 API/库用法时先看现有用法保持风格一致。
 - 中文沟通与文档。
