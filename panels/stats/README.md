@@ -13,6 +13,7 @@
 - 完成占比、每日痕迹（跨度超过 31 天改按周）、本月事件日历、活动完成率排行、最近痕迹列表
 - Career 面板 readiness / RTO / 下一步摘要
 - 最近时间线同时展示玩法事件和 Career milestone；玩法 KPI 只统计 draw，不把面板事件误算为 pending
+- 时间代币只来自 `draw_done.payload.duration`；面板 milestone 不参与代币计算
 - 完成率分母是已结算（完成 + 跳过）；进行中的 pending 单独计数，不计入完成率
 
 ## 与 events 的关系

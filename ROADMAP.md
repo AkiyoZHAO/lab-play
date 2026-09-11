@@ -30,7 +30,6 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 - [x] 皮肤层:anchor→皮肤绑定 + 兜底
 - [x] 首页 `self-glance`(周视图)
 - [x] 图鉴:按共享 events 解锁卡牌与统计 encounters
-- [ ] 外部打卡接入(远):待确定具体数据源;只接受自动同步,不做手工搬运
 
 已接:首页(玩法/面板两栏 + self-glance + 默认皮肤)· 抽卡 · Dashboard · 事业面板(概览 + 私有下钻/编辑)· 图鉴。
 
@@ -42,3 +41,4 @@ README 记「现在是什么」,这里记「要去哪、还差什么、为什么
 - **2026-09-11** `akiyolab.com` 已有 Worker Static Assets 与 custom domain,不重复创建 Pages 项目;部署配置迁入本仓库,待权限地基上线后覆盖旧落地页。
 - **2026-09-11** Supabase 创建唯一 Owner 用户,关闭公开注册,配置正式/预览/本地回跳 URL;events 与 Career 表 RLS 已做 anon 拒写 + Owner 事务试写验证。
 - **2026-09-11** `akiyolab.com` 正式发布 lab-play;线上功能页与匿名门禁通过浏览器回归,仓库元数据/SQL/验收脚本不进入静态资产。
+- **2026-09-11** 删除未定义数据源的「外部打卡」待办,不为清单完整度引入同步复杂度;当前只有 `draw_done.payload.duration` 累计为时间代币,`career_milestone` 只进入共享时间线、不产生代币。
